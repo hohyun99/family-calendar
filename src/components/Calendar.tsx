@@ -84,26 +84,41 @@ export default function Calendar() {
   const [notifyPermission, setNotifyPermission] = useState<NotificationPermission>('default');
   const [toasts, setToasts] = useState<{ id: number; message: string }[]>([]);
 
-  // Web Audio API — 첫 클릭 후 unlock, 이후 백그라운드에서도 소리 재생 가능
   const audioCtxRef = useRef<AudioContext | null>(null);
+  const audioReadyRef = useRef(false);
 
-  useEffect(() => {
-    const unlock = () => {
-      if (audioCtxRef.current) return;
-      audioCtxRef.current = new AudioContext();
+  // AudioContext 초기화 + 사일런트 루프 시작 (사용자 제스처 필요)
+  const initAudio = useCallback(() => {
+    if (audioReadyRef.current) return;
+    audioReadyRef.current = true;
+    const ctx = new AudioContext();
+    audioCtxRef.current = ctx;
+
+    // 5초마다 무음 버퍼 재생 → AudioContext suspended 방지
+    const playSilent = () => {
+      if (ctx.state === 'suspended') ctx.resume();
+      const buf = ctx.createBuffer(1, ctx.sampleRate / 10, ctx.sampleRate);
+      const src = ctx.createBufferSource();
+      src.buffer = buf;
+      src.connect(ctx.destination);
+      src.start();
     };
-    window.addEventListener('click', unlock, { once: true });
-    return () => window.removeEventListener('click', unlock);
+    playSilent();
+    setInterval(playSilent, 5000);
   }, []);
 
-  // AudioContext가 백그라운드에서 suspended 상태가 되지 않도록 10초마다 resume
+  // Web Locks API — 탭이 freeze되지 않도록 잠금 유지
   useEffect(() => {
-    const t = setInterval(() => {
-      if (audioCtxRef.current?.state === 'suspended') {
-        audioCtxRef.current.resume();
-      }
-    }, 10000);
-    return () => clearInterval(t);
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const locks = (navigator as any).locks;
+    if (!locks) return;
+    let released = false;
+    locks.request('calendar-keep-alive', { mode: 'shared' },
+      () => new Promise<void>(resolve => {
+        const t = setInterval(() => { if (released) { clearInterval(t); resolve(); } }, 5000);
+      })
+    );
+    return () => { released = true; };
   }, []);
 
   const refresh = useCallback(() => setEvents(listEvents()), []);
@@ -122,16 +137,12 @@ export default function Calendar() {
   const fireNotification = useCallback((ev: CalendarEvent) => {
     const call = MEMBER_CALL[ev.member] ?? `${ev.member}아`;
     const msg = `${call} ${ev.title} 할 시간이에요! 10분 후 시작해요.`;
-    // 1) 브라우저 알림 (백그라운드 OK)
     sendBrowserNotification(ev);
-    // 2) 소리 (Web Audio — 백그라운드 OK, unlock된 경우)
     if (audioCtxRef.current) {
       if (audioCtxRef.current.state === 'suspended') audioCtxRef.current.resume();
       playBeep(audioCtxRef.current);
     }
-    // 3) 음성 TTS (포그라운드에서만 안정적)
     speakText(`${call}, ${ev.title} 할 시간이에요. 10분 후에 시작해요.`);
-    // 4) 화면 토스트 (항상 표시)
     addToast(msg);
     markNotified(ev.id);
   }, [addToast]);
@@ -277,7 +288,10 @@ export default function Calendar() {
         )}
         {notifyPermission === 'default' && (
           <button
-            onClick={async () => setNotifyPermission(await requestNotificationPermission())}
+            onClick={async () => {
+              initAudio(); // 버튼 클릭 시점에 AudioContext + Web Lock 활성화
+              setNotifyPermission(await requestNotificationPermission());
+            }}
             className="bg-amber-50 border border-amber-200 rounded-2xl px-4 py-3 flex items-center gap-2 text-sm text-amber-700 w-full hover:bg-amber-100 transition"
           >
             <span>🔔</span>
@@ -290,6 +304,7 @@ export default function Calendar() {
             <span className="flex-1">알림 켜짐 — 탭이 열려 있는 동안 소리+음성으로 알려드려요.</span>
             <button
               onClick={() => {
+                initAudio();
                 if (audioCtxRef.current) playBeep(audioCtxRef.current);
                 speakText('유찬아, 알림 테스트예요!');
               }}
