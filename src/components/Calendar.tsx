@@ -46,6 +46,18 @@ function sendBrowserNotification(event: CalendarEvent) {
   new Notification(`📅 ${event.member} 일정 알림`, { body });
 }
 
+function speakNotification(event: CalendarEvent) {
+  if (typeof window === 'undefined' || !window.speechSynthesis) return;
+  window.speechSynthesis.cancel(); // 이전 발화 중단
+  const call = MEMBER_CALL[event.member] ?? `${event.member}아`;
+  const text = `${call}, ${event.title} 할 시간이에요. 10분 후에 시작해요.`;
+  const utterance = new SpeechSynthesisUtterance(text);
+  utterance.lang = 'ko-KR';
+  utterance.rate = 0.9;
+  utterance.pitch = 1.1;
+  window.speechSynthesis.speak(utterance);
+}
+
 export default function Calendar() {
   const [currentMonth, setCurrentMonth] = useState(new Date());
   const [events, setEvents] = useState<CalendarEvent[]>([]);
@@ -77,6 +89,7 @@ export default function Calendar() {
       const upcoming = getUpcomingEvents();
       for (const ev of upcoming) {
         sendBrowserNotification(ev);
+        speakNotification(ev);
         markNotified(ev.id);
       }
       if (upcoming.length > 0) refresh();
@@ -201,7 +214,18 @@ export default function Calendar() {
         {notifyPermission === 'granted' && (
           <div className="bg-green-50 border border-green-200 rounded-2xl px-4 py-3 flex items-center gap-2 text-sm text-green-700">
             <span>🔔</span>
-            <span>알림이 켜져 있어요. 이 탭이 열려 있는 동안 10분 전에 알려드려요.</span>
+            <span className="flex-1">알림이 켜져 있어요. 이 탭이 열려 있는 동안 10분 전에 알려드려요.</span>
+            <button
+              onClick={() => {
+                const u = new SpeechSynthesisUtterance('유찬아, 알림 테스트예요!');
+                u.lang = 'ko-KR'; u.rate = 0.9;
+                window.speechSynthesis.cancel();
+                window.speechSynthesis.speak(u);
+              }}
+              className="text-xs bg-green-100 hover:bg-green-200 px-2 py-1 rounded-lg transition whitespace-nowrap"
+            >
+              음성 테스트
+            </button>
           </div>
         )}
 
