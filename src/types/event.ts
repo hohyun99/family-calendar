@@ -7,13 +7,4 @@ export interface EventPayload {
   notify: boolean;
 }
 
-export interface CalendarEvent {
-  id: number;
-  title: string;
-  member: string;
-  start_at: string;
-  end_at: string | null;
-  all_day: number;
-  notify: number;
-  notified: number;
-}
+export type { CalendarEvent } from '@/lib/storage';

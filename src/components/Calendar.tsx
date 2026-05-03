@@ -9,7 +9,8 @@ import {
 import { ko } from 'date-fns/locale';
 import EventForm from './EventForm';
 import VoiceInput from './VoiceInput';
-import { CalendarEvent, EventPayload } from '@/types/event';
+import { EventPayload, CalendarEvent } from '@/types/event';
+import { listEvents, addEvent, deleteEvent, getUpcomingEvents, markNotified } from '@/lib/storage';
 
 const MEMBER_COLORS: Record<string, string> = {
   유찬: 'bg-blue-400',
@@ -25,6 +26,28 @@ const MEMBER_TEXT: Record<string, string> = {
   아빠: 'text-orange-700',
 };
 
+const MEMBER_CALL: Record<string, string> = {
+  유찬: '유찬아',
+  유주: '유주야',
+  엄마: '여보',
+  아빠: '자기야',
+};
+
+async function requestNotificationPermission() {
+  if (typeof Notification === 'undefined') return false;
+  if (Notification.permission === 'granted') return true;
+  if (Notification.permission === 'denied') return false;
+  const result = await Notification.requestPermission();
+  return result === 'granted';
+}
+
+function sendBrowserNotification(event: CalendarEvent) {
+  if (typeof Notification === 'undefined' || Notification.permission !== 'granted') return;
+  const call = MEMBER_CALL[event.member] ?? `${event.member}아`;
+  const body = `${call} ${event.title} 할 시간이에요! 10분 후 시작해요.`;
+  new Notification(`📅 ${event.member} 일정 알림`, { body, icon: '/favicon.ico' });
+}
+
 export default function Calendar() {
   const [currentMonth, setCurrentMonth] = useState(new Date());
   const [events, setEvents] = useState<CalendarEvent[]>([]);
@@ -34,27 +57,27 @@ export default function Calendar() {
   const [showVoice, setShowVoice] = useState(false);
   const [selectedEvent, setSelectedEvent] = useState<CalendarEvent | null>(null);
 
-  const fetchEvents = useCallback(async () => {
-    const from = startOfWeek(startOfMonth(currentMonth), { weekStartsOn: 0 });
-    const to = endOfWeek(endOfMonth(currentMonth), { weekStartsOn: 0 });
-    const res = await fetch(
-      `/api/events?from=${from.toISOString()}&to=${to.toISOString()}`
-    );
-    const data = await res.json();
-    setEvents(data);
-  }, [currentMonth]);
+  const refresh = useCallback(() => setEvents(listEvents()), []);
 
   useEffect(() => {
-    fetchEvents();
-  }, [fetchEvents]);
+    refresh();
+    requestNotificationPermission();
+  }, [refresh]);
 
   // 매분 알림 체크
   useEffect(() => {
-    const check = () => fetch('/api/notify', { method: 'POST' });
+    const check = () => {
+      const upcoming = getUpcomingEvents();
+      for (const ev of upcoming) {
+        sendBrowserNotification(ev);
+        markNotified(ev.id);
+      }
+      if (upcoming.length > 0) refresh();
+    };
     check();
-    const interval = setInterval(check, 60 * 1000);
-    return () => clearInterval(interval);
-  }, []);
+    const timer = setInterval(check, 60 * 1000);
+    return () => clearInterval(timer);
+  }, [refresh]);
 
   const days = eachDayOfInterval({
     start: startOfWeek(startOfMonth(currentMonth), { weekStartsOn: 0 }),
@@ -71,29 +94,27 @@ export default function Calendar() {
   };
 
   const handleAddEvent = async (data: EventPayload) => {
-    await fetch('/api/events', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(data),
+    addEvent({
+      title: data.title,
+      member: data.member,
+      start_at: data.start_at,
+      end_at: data.end_at ?? null,
+      all_day: data.all_day,
+      notify: data.notify,
     });
-    await fetchEvents();
+    refresh();
     setShowForm(false);
   };
 
-  const handleDeleteEvent = async (id: number) => {
+  const handleDeleteEvent = (id: number) => {
     if (!confirm('이 일정을 삭제할까요?')) return;
-    await fetch(`/api/events/${id}`, { method: 'DELETE' });
-    await fetchEvents();
+    deleteEvent(id);
+    refresh();
     setSelectedEvent(null);
   };
 
   const handleVoiceParsed = (parsed: { title: string; member: string; start_at: string; end_at?: string }) => {
-    setFormInitial({
-      title: parsed.title,
-      member: parsed.member,
-      start_at: parsed.start_at,
-      end_at: parsed.end_at,
-    });
+    setFormInitial({ title: parsed.title, member: parsed.member, start_at: parsed.start_at, end_at: parsed.end_at });
     setShowVoice(false);
     setShowForm(true);
     setSelectedDay(new Date(parsed.start_at));
@@ -196,7 +217,7 @@ export default function Calendar() {
                     <span className={`w-2 h-2 rounded-full ${MEMBER_COLORS[e.member] ?? 'bg-gray-400'}`} />
                     <span className={`text-xs font-semibold ${MEMBER_TEXT[e.member] ?? 'text-gray-600'}`}>{e.member}</span>
                     <span className="text-sm font-medium text-gray-800 flex-1">{e.title}</span>
-                    {e.notify ? <span className="text-xs text-gray-400">🔔</span> : null}
+                    {e.notify && <span className="text-xs text-gray-400">🔔</span>}
                   </div>
                   {!e.all_day && (
                     <p className="text-xs text-gray-400 mt-1 ml-4">
