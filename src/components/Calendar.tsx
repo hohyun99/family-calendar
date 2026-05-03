@@ -33,19 +33,17 @@ const MEMBER_CALL: Record<string, string> = {
   아빠: '자기야',
 };
 
-async function requestNotificationPermission() {
-  if (typeof Notification === 'undefined') return false;
-  if (Notification.permission === 'granted') return true;
-  if (Notification.permission === 'denied') return false;
-  const result = await Notification.requestPermission();
-  return result === 'granted';
+async function requestNotificationPermission(): Promise<NotificationPermission> {
+  if (typeof Notification === 'undefined') return 'denied';
+  if (Notification.permission !== 'default') return Notification.permission;
+  return Notification.requestPermission();
 }
 
 function sendBrowserNotification(event: CalendarEvent) {
   if (typeof Notification === 'undefined' || Notification.permission !== 'granted') return;
   const call = MEMBER_CALL[event.member] ?? `${event.member}아`;
   const body = `${call} ${event.title} 할 시간이에요! 10분 후 시작해요.`;
-  new Notification(`📅 ${event.member} 일정 알림`, { body, icon: '/favicon.ico' });
+  new Notification(`📅 ${event.member} 일정 알림`, { body });
 }
 
 export default function Calendar() {
@@ -57,15 +55,23 @@ export default function Calendar() {
   const [showVoice, setShowVoice] = useState(false);
   const [selectedEvent, setSelectedEvent] = useState<CalendarEvent | null>(null);
   const [editingEvent, setEditingEvent] = useState<CalendarEvent | null>(null);
+  const [notifyPermission, setNotifyPermission] = useState<NotificationPermission>('default');
 
   const refresh = useCallback(() => setEvents(listEvents()), []);
 
   useEffect(() => {
     refresh();
-    requestNotificationPermission();
+    if (typeof Notification !== 'undefined') {
+      setNotifyPermission(Notification.permission);
+    }
   }, [refresh]);
 
-  // 매분 알림 체크
+  const handleRequestPermission = async () => {
+    const result = await requestNotificationPermission();
+    setNotifyPermission(result);
+  };
+
+  // 매분 알림 체크 + 탭 복귀 시 즉시 체크
   useEffect(() => {
     const check = () => {
       const upcoming = getUpcomingEvents();
@@ -75,9 +81,19 @@ export default function Calendar() {
       }
       if (upcoming.length > 0) refresh();
     };
+
     check();
     const timer = setInterval(check, 60 * 1000);
-    return () => clearInterval(timer);
+
+    const onVisible = () => {
+      if (document.visibilityState === 'visible') check();
+    };
+    document.addEventListener('visibilitychange', onVisible);
+
+    return () => {
+      clearInterval(timer);
+      document.removeEventListener('visibilitychange', onVisible);
+    };
   }, [refresh]);
 
   const days = eachDayOfInterval({
@@ -165,6 +181,29 @@ export default function Calendar() {
           </h1>
           <button onClick={() => setCurrentMonth(addMonths(currentMonth, 1))} className="text-gray-400 hover:text-gray-700 text-xl px-2">›</button>
         </div>
+
+        {/* 알림 권한 상태 배너 */}
+        {notifyPermission === 'denied' && (
+          <div className="bg-red-50 border border-red-200 rounded-2xl px-4 py-3 flex items-center gap-2 text-sm text-red-600">
+            <span>🔕</span>
+            <span className="flex-1">알림이 차단되어 있어요. 브라우저 설정 → 이 사이트 → 알림 허용으로 변경해 주세요.</span>
+          </div>
+        )}
+        {notifyPermission === 'default' && (
+          <button
+            onClick={handleRequestPermission}
+            className="bg-amber-50 border border-amber-200 rounded-2xl px-4 py-3 flex items-center gap-2 text-sm text-amber-700 w-full hover:bg-amber-100 transition"
+          >
+            <span>🔔</span>
+            <span>10분 전 알림을 받으려면 여기를 눌러 허용해 주세요</span>
+          </button>
+        )}
+        {notifyPermission === 'granted' && (
+          <div className="bg-green-50 border border-green-200 rounded-2xl px-4 py-3 flex items-center gap-2 text-sm text-green-700">
+            <span>🔔</span>
+            <span>알림이 켜져 있어요. 이 탭이 열려 있는 동안 10분 전에 알려드려요.</span>
+          </div>
+        )}
 
         {/* 버튼 */}
         <div className="flex gap-2">

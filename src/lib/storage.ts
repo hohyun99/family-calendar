@@ -61,12 +61,12 @@ export function markNotified(id: number) {
   save(load().map(e => e.id === id ? { ...e, notified: true } : e));
 }
 
-// 9~11분 후 시작하고 아직 알림 안 보낸 이벤트
+// 8~12분 후 시작하고 아직 알림 안 보낸 이벤트 (타이머 지연 허용치 포함)
 export function getUpcomingEvents(): CalendarEvent[] {
   const now = Date.now();
   return load().filter(e => {
     if (!e.notify || e.notified || e.all_day) return false;
     const diff = new Date(e.start_at).getTime() - now;
-    return diff >= 9 * 60 * 1000 && diff <= 11 * 60 * 1000;
+    return diff >= 8 * 60 * 1000 && diff <= 12 * 60 * 1000;
   });
 }
