@@ -48,13 +48,17 @@ function sendBrowserNotification(event: CalendarEvent) {
 
 function speakNotification(event: CalendarEvent) {
   if (typeof window === 'undefined' || !window.speechSynthesis) return;
-  window.speechSynthesis.cancel(); // 이전 발화 중단
   const call = MEMBER_CALL[event.member] ?? `${event.member}아`;
   const text = `${call}, ${event.title} 할 시간이에요. 10분 후에 시작해요.`;
   const utterance = new SpeechSynthesisUtterance(text);
   utterance.lang = 'ko-KR';
   utterance.rate = 0.9;
   utterance.pitch = 1.1;
+  // Chrome은 백그라운드 탭에서 speechSynthesis 엔진을 멈춰버림
+  // cancel() 후 pause()/resume()으로 엔진을 깨운 뒤 발화
+  window.speechSynthesis.cancel();
+  window.speechSynthesis.pause();
+  window.speechSynthesis.resume();
   window.speechSynthesis.speak(utterance);
 }
 
@@ -68,6 +72,7 @@ export default function Calendar() {
   const [selectedEvent, setSelectedEvent] = useState<CalendarEvent | null>(null);
   const [editingEvent, setEditingEvent] = useState<CalendarEvent | null>(null);
   const [notifyPermission, setNotifyPermission] = useState<NotificationPermission>('default');
+  const [toasts, setToasts] = useState<{ id: number; message: string }[]>([]);
 
   const refresh = useCallback(() => setEvents(listEvents()), []);
 
@@ -83,6 +88,24 @@ export default function Calendar() {
     setNotifyPermission(result);
   };
 
+  const addToast = useCallback((message: string) => {
+    const id = Date.now();
+    setToasts(prev => [...prev, { id, message }]);
+    setTimeout(() => setToasts(prev => prev.filter(t => t.id !== id)), 8000);
+  }, []);
+
+  // Chrome 백그라운드 탭에서 speechSynthesis 엔진이 15초 후 멈추는 버그 방지
+  useEffect(() => {
+    if (typeof window === 'undefined' || !window.speechSynthesis) return;
+    const keepAlive = setInterval(() => {
+      if (!window.speechSynthesis.speaking) {
+        window.speechSynthesis.pause();
+        window.speechSynthesis.resume();
+      }
+    }, 14000);
+    return () => clearInterval(keepAlive);
+  }, []);
+
   // 매분 알림 체크 + 탭 복귀 시 즉시 체크
   useEffect(() => {
     const check = () => {
@@ -90,6 +113,8 @@ export default function Calendar() {
       for (const ev of upcoming) {
         sendBrowserNotification(ev);
         speakNotification(ev);
+        const call = MEMBER_CALL[ev.member] ?? `${ev.member}아`;
+        addToast(`${call} ${ev.title} 할 시간이에요! 10분 후 시작해요.`);
         markNotified(ev.id);
       }
       if (upcoming.length > 0) refresh();
@@ -185,6 +210,15 @@ export default function Calendar() {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-indigo-50 to-pink-50 p-4">
+      {/* 토스트 알림 */}
+      <div className="fixed top-4 left-1/2 -translate-x-1/2 z-50 flex flex-col gap-2 w-full max-w-sm px-4 pointer-events-none">
+        {toasts.map(t => (
+          <div key={t.id} className="bg-gray-900 text-white text-sm rounded-2xl px-4 py-3 shadow-xl animate-bounce">
+            🔔 {t.message}
+          </div>
+        ))}
+      </div>
+
       <div className="max-w-lg mx-auto space-y-4">
         {/* 헤더 */}
         <div className="bg-white rounded-2xl shadow p-4 flex items-center justify-between">
