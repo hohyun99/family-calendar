@@ -44,7 +44,7 @@ export default function EventForm({ initial, submitLabel = '저장', onSubmit, o
         title,
         member,
         start_at: localToIso(startAt),
-        end_at: endAt ? localToIso(endAt) : undefined,
+        end_at: endAt ? localToIso(endAt) : null,
         all_day: allDay,
         notify,
       });
