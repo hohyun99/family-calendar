@@ -10,6 +10,7 @@ import { ko } from 'date-fns/locale';
 import EventForm from './EventForm';
 import VoiceInput from './VoiceInput';
 import WeeklyView from './WeeklyView';
+import WeatherWidget from './WeatherWidget';
 import { EventPayload, CalendarEvent } from '@/types/event';
 import { listEvents, addEvent, updateEvent, deleteEvent, markNotified } from '@/lib/storage';
 
@@ -270,6 +271,9 @@ export default function Calendar() {
       </div>
 
       <div className="max-w-lg mx-auto space-y-4">
+        {/* 날씨 */}
+        <WeatherWidget />
+
         {/* 헤더 */}
         <div className="bg-white rounded-2xl shadow p-4 flex items-center justify-between">
           <button onClick={() => setCurrentMonth(subMonths(currentMonth, 1))} className="text-gray-400 hover:text-gray-700 text-xl px-2">‹</button>
