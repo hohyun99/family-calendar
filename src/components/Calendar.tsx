@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import {
   startOfMonth, endOfMonth, startOfWeek, endOfWeek,
   eachDayOfInterval, isSameMonth, isSameDay, format, addMonths, subMonths,
@@ -9,8 +9,9 @@ import {
 import { ko } from 'date-fns/locale';
 import EventForm from './EventForm';
 import VoiceInput from './VoiceInput';
+import WeeklyView from './WeeklyView';
 import { EventPayload, CalendarEvent } from '@/types/event';
-import { listEvents, addEvent, updateEvent, deleteEvent, getUpcomingEvents, markNotified } from '@/lib/storage';
+import { listEvents, addEvent, updateEvent, deleteEvent, markNotified } from '@/lib/storage';
 
 const MEMBER_COLORS: Record<string, string> = {
   유찬: 'bg-blue-400',
@@ -42,24 +43,33 @@ async function requestNotificationPermission(): Promise<NotificationPermission> 
 function sendBrowserNotification(event: CalendarEvent) {
   if (typeof Notification === 'undefined' || Notification.permission !== 'granted') return;
   const call = MEMBER_CALL[event.member] ?? `${event.member}아`;
-  const body = `${call} ${event.title} 할 시간이에요! 10분 후 시작해요.`;
-  new Notification(`📅 ${event.member} 일정 알림`, { body });
+  new Notification(`📅 ${event.member} 일정 알림`, {
+    body: `${call} ${event.title} 할 시간이에요! 10분 후 시작해요.`,
+  });
 }
 
-function speakNotification(event: CalendarEvent) {
+// Web Audio API로 "딩동" 소리 — speechSynthesis보다 백그라운드에서 안정적
+function playBeep(ctx: AudioContext) {
+  const now = ctx.currentTime;
+  const osc = ctx.createOscillator();
+  const gain = ctx.createGain();
+  osc.connect(gain);
+  gain.connect(ctx.destination);
+  osc.frequency.value = 880;
+  gain.gain.setValueAtTime(0, now);
+  gain.gain.linearRampToValueAtTime(0.4, now + 0.05);
+  gain.gain.exponentialRampToValueAtTime(0.001, now + 0.8);
+  osc.start(now);
+  osc.stop(now + 0.8);
+}
+
+function speakText(text: string) {
   if (typeof window === 'undefined' || !window.speechSynthesis) return;
-  const call = MEMBER_CALL[event.member] ?? `${event.member}아`;
-  const text = `${call}, ${event.title} 할 시간이에요. 10분 후에 시작해요.`;
-  const utterance = new SpeechSynthesisUtterance(text);
-  utterance.lang = 'ko-KR';
-  utterance.rate = 0.9;
-  utterance.pitch = 1.1;
-  // Chrome은 백그라운드 탭에서 speechSynthesis 엔진을 멈춰버림
-  // cancel() 후 pause()/resume()으로 엔진을 깨운 뒤 발화
   window.speechSynthesis.cancel();
-  window.speechSynthesis.pause();
-  window.speechSynthesis.resume();
-  window.speechSynthesis.speak(utterance);
+  const u = new SpeechSynthesisUtterance(text);
+  u.lang = 'ko-KR';
+  u.rate = 0.9;
+  window.speechSynthesis.speak(u);
 }
 
 export default function Calendar() {
@@ -74,19 +84,34 @@ export default function Calendar() {
   const [notifyPermission, setNotifyPermission] = useState<NotificationPermission>('default');
   const [toasts, setToasts] = useState<{ id: number; message: string }[]>([]);
 
+  // Web Audio API — 첫 클릭 후 unlock, 이후 백그라운드에서도 소리 재생 가능
+  const audioCtxRef = useRef<AudioContext | null>(null);
+
+  useEffect(() => {
+    const unlock = () => {
+      if (audioCtxRef.current) return;
+      audioCtxRef.current = new AudioContext();
+    };
+    window.addEventListener('click', unlock, { once: true });
+    return () => window.removeEventListener('click', unlock);
+  }, []);
+
+  // AudioContext가 백그라운드에서 suspended 상태가 되지 않도록 10초마다 resume
+  useEffect(() => {
+    const t = setInterval(() => {
+      if (audioCtxRef.current?.state === 'suspended') {
+        audioCtxRef.current.resume();
+      }
+    }, 10000);
+    return () => clearInterval(t);
+  }, []);
+
   const refresh = useCallback(() => setEvents(listEvents()), []);
 
   useEffect(() => {
     refresh();
-    if (typeof Notification !== 'undefined') {
-      setNotifyPermission(Notification.permission);
-    }
+    if (typeof Notification !== 'undefined') setNotifyPermission(Notification.permission);
   }, [refresh]);
-
-  const handleRequestPermission = async () => {
-    const result = await requestNotificationPermission();
-    setNotifyPermission(result);
-  };
 
   const addToast = useCallback((message: string) => {
     const id = Date.now();
@@ -94,45 +119,69 @@ export default function Calendar() {
     setTimeout(() => setToasts(prev => prev.filter(t => t.id !== id)), 8000);
   }, []);
 
-  // Chrome 백그라운드 탭에서 speechSynthesis 엔진이 15초 후 멈추는 버그 방지
-  useEffect(() => {
-    if (typeof window === 'undefined' || !window.speechSynthesis) return;
-    const keepAlive = setInterval(() => {
-      if (!window.speechSynthesis.speaking) {
-        window.speechSynthesis.pause();
-        window.speechSynthesis.resume();
-      }
-    }, 14000);
-    return () => clearInterval(keepAlive);
-  }, []);
+  const fireNotification = useCallback((ev: CalendarEvent) => {
+    const call = MEMBER_CALL[ev.member] ?? `${ev.member}아`;
+    const msg = `${call} ${ev.title} 할 시간이에요! 10분 후 시작해요.`;
+    // 1) 브라우저 알림 (백그라운드 OK)
+    sendBrowserNotification(ev);
+    // 2) 소리 (Web Audio — 백그라운드 OK, unlock된 경우)
+    if (audioCtxRef.current) {
+      if (audioCtxRef.current.state === 'suspended') audioCtxRef.current.resume();
+      playBeep(audioCtxRef.current);
+    }
+    // 3) 음성 TTS (포그라운드에서만 안정적)
+    speakText(`${call}, ${ev.title} 할 시간이에요. 10분 후에 시작해요.`);
+    // 4) 화면 토스트 (항상 표시)
+    addToast(msg);
+    markNotified(ev.id);
+  }, [addToast]);
 
-  // 매분 알림 체크 + 탭 복귀 시 즉시 체크
+  // ── 핵심: 이벤트마다 정확한 setTimeout 예약 ──────────────────────────
+  // setInterval 폴링은 Chrome이 탭을 suspend하면 멈춤.
+  // setTimeout으로 정확한 시각에 예약하면 훨씬 안정적.
+  useEffect(() => {
+    const timers: ReturnType<typeof setTimeout>[] = [];
+    const now = Date.now();
+
+    for (const ev of events) {
+      if (!ev.notify || ev.notified || ev.all_day) continue;
+      const notifyAt = new Date(ev.start_at).getTime() - 10 * 60 * 1000;
+      const delay = notifyAt - now;
+      // 0초~24시간 이내인 것만 예약 (과거 또는 너무 먼 미래 제외)
+      if (delay >= 0 && delay < 24 * 60 * 60 * 1000) {
+        timers.push(setTimeout(() => {
+          fireNotification(ev);
+          refresh();
+        }, delay));
+      }
+    }
+
+    return () => timers.forEach(clearTimeout);
+  }, [events, fireNotification, refresh]);
+
+  // ── 보조: 60초 폴링 (setTimeout 예약이 누락될 경우 안전망) ──────────
   useEffect(() => {
     const check = () => {
-      const upcoming = getUpcomingEvents();
-      for (const ev of upcoming) {
-        sendBrowserNotification(ev);
-        speakNotification(ev);
-        const call = MEMBER_CALL[ev.member] ?? `${ev.member}아`;
-        addToast(`${call} ${ev.title} 할 시간이에요! 10분 후 시작해요.`);
-        markNotified(ev.id);
+      const now = Date.now();
+      const all = listEvents();
+      for (const ev of all) {
+        if (!ev.notify || ev.notified || ev.all_day) continue;
+        const diff = new Date(ev.start_at).getTime() - now;
+        if (diff >= 8 * 60 * 1000 && diff <= 12 * 60 * 1000) {
+          fireNotification(ev);
+        }
       }
-      if (upcoming.length > 0) refresh();
+      refresh();
     };
 
-    check();
     const timer = setInterval(check, 60 * 1000);
-
-    const onVisible = () => {
-      if (document.visibilityState === 'visible') check();
-    };
+    const onVisible = () => { if (document.visibilityState === 'visible') check(); };
     document.addEventListener('visibilitychange', onVisible);
-
     return () => {
       clearInterval(timer);
       document.removeEventListener('visibilitychange', onVisible);
     };
-  }, [refresh]);
+  }, [fireNotification, refresh]);
 
   const days = eachDayOfInterval({
     start: startOfWeek(startOfMonth(currentMonth), { weekStartsOn: 0 }),
@@ -152,23 +201,16 @@ export default function Calendar() {
   const handleSaveEvent = async (data: EventPayload) => {
     if (editingEvent) {
       updateEvent(editingEvent.id, {
-        title: data.title,
-        member: data.member,
-        start_at: data.start_at,
-        end_at: data.end_at ?? null,
-        all_day: data.all_day,
-        notify: data.notify,
-        notified: editingEvent.notified,
+        title: data.title, member: data.member,
+        start_at: data.start_at, end_at: data.end_at ?? null,
+        all_day: data.all_day, notify: data.notify, notified: editingEvent.notified,
       });
       setEditingEvent(null);
     } else {
       addEvent({
-        title: data.title,
-        member: data.member,
-        start_at: data.start_at,
-        end_at: data.end_at ?? null,
-        all_day: data.all_day,
-        notify: data.notify,
+        title: data.title, member: data.member,
+        start_at: data.start_at, end_at: data.end_at ?? null,
+        all_day: data.all_day, notify: data.notify,
       });
     }
     refresh();
@@ -179,12 +221,9 @@ export default function Calendar() {
   const handleEditEvent = (event: CalendarEvent) => {
     setEditingEvent(event);
     setFormInitial({
-      title: event.title,
-      member: event.member,
-      start_at: event.start_at,
-      end_at: event.end_at ?? undefined,
-      all_day: event.all_day,
-      notify: event.notify,
+      title: event.title, member: event.member,
+      start_at: event.start_at, end_at: event.end_at ?? undefined,
+      all_day: event.all_day, notify: event.notify,
     });
     setShowForm(true);
     setShowVoice(false);
@@ -213,7 +252,7 @@ export default function Calendar() {
       {/* 토스트 알림 */}
       <div className="fixed top-4 left-1/2 -translate-x-1/2 z-50 flex flex-col gap-2 w-full max-w-sm px-4 pointer-events-none">
         {toasts.map(t => (
-          <div key={t.id} className="bg-gray-900 text-white text-sm rounded-2xl px-4 py-3 shadow-xl animate-bounce">
+          <div key={t.id} className="bg-gray-900 text-white text-sm rounded-2xl px-4 py-3 shadow-xl">
             🔔 {t.message}
           </div>
         ))}
@@ -229,7 +268,7 @@ export default function Calendar() {
           <button onClick={() => setCurrentMonth(addMonths(currentMonth, 1))} className="text-gray-400 hover:text-gray-700 text-xl px-2">›</button>
         </div>
 
-        {/* 알림 권한 상태 배너 */}
+        {/* 알림 권한 배너 */}
         {notifyPermission === 'denied' && (
           <div className="bg-red-50 border border-red-200 rounded-2xl px-4 py-3 flex items-center gap-2 text-sm text-red-600">
             <span>🔕</span>
@@ -238,7 +277,7 @@ export default function Calendar() {
         )}
         {notifyPermission === 'default' && (
           <button
-            onClick={handleRequestPermission}
+            onClick={async () => setNotifyPermission(await requestNotificationPermission())}
             className="bg-amber-50 border border-amber-200 rounded-2xl px-4 py-3 flex items-center gap-2 text-sm text-amber-700 w-full hover:bg-amber-100 transition"
           >
             <span>🔔</span>
@@ -248,17 +287,15 @@ export default function Calendar() {
         {notifyPermission === 'granted' && (
           <div className="bg-green-50 border border-green-200 rounded-2xl px-4 py-3 flex items-center gap-2 text-sm text-green-700">
             <span>🔔</span>
-            <span className="flex-1">알림이 켜져 있어요. 이 탭이 열려 있는 동안 10분 전에 알려드려요.</span>
+            <span className="flex-1">알림 켜짐 — 탭이 열려 있는 동안 소리+음성으로 알려드려요.</span>
             <button
               onClick={() => {
-                const u = new SpeechSynthesisUtterance('유찬아, 알림 테스트예요!');
-                u.lang = 'ko-KR'; u.rate = 0.9;
-                window.speechSynthesis.cancel();
-                window.speechSynthesis.speak(u);
+                if (audioCtxRef.current) playBeep(audioCtxRef.current);
+                speakText('유찬아, 알림 테스트예요!');
               }}
               className="text-xs bg-green-100 hover:bg-green-200 px-2 py-1 rounded-lg transition whitespace-nowrap"
             >
-              음성 테스트
+              소리 테스트
             </button>
           </div>
         )}
@@ -359,15 +396,11 @@ export default function Calendar() {
                       <button
                         onClick={ev => { ev.stopPropagation(); handleEditEvent(e); }}
                         className="text-xs text-indigo-500 hover:text-indigo-700"
-                      >
-                        수정
-                      </button>
+                      >수정</button>
                       <button
                         onClick={ev => { ev.stopPropagation(); handleDeleteEvent(e.id); }}
                         className="text-xs text-red-400 hover:text-red-600"
-                      >
-                        삭제
-                      </button>
+                      >삭제</button>
                     </div>
                   )}
                 </div>
@@ -390,6 +423,9 @@ export default function Calendar() {
             />
           </div>
         )}
+
+        {/* 주간 일정표 */}
+        <WeeklyView />
 
         {/* 가족 구성원 범례 */}
         <div className="bg-white rounded-2xl shadow p-3 flex justify-around">
