@@ -7,6 +7,7 @@ const MEMBERS = ['유찬', '유주', '엄마', '아빠'];
 
 interface Props {
   initial?: Partial<EventPayload>;
+  submitLabel?: string;
   onSubmit: (data: EventPayload) => Promise<void>;
   onCancel: () => void;
 }
@@ -21,7 +22,7 @@ function localToIso(local: string) {
   return new Date(local).toISOString();
 }
 
-export default function EventForm({ initial, onSubmit, onCancel }: Props) {
+export default function EventForm({ initial, submitLabel = '저장', onSubmit, onCancel }: Props) {
   const now = new Date();
   now.setMinutes(Math.ceil(now.getMinutes() / 30) * 30, 0, 0);
 
@@ -138,7 +139,7 @@ export default function EventForm({ initial, onSubmit, onCancel }: Props) {
           disabled={loading}
           className="flex-1 bg-indigo-500 text-white rounded-xl py-2 text-sm font-medium hover:bg-indigo-600 disabled:opacity-50 transition"
         >
-          {loading ? '저장 중...' : '저장'}
+          {loading ? '저장 중...' : submitLabel}
         </button>
         <button
           type="button"

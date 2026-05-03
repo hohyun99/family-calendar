@@ -41,6 +41,18 @@ export function addEvent(payload: Omit<CalendarEvent, 'id' | 'notified' | 'creat
   return event;
 }
 
+export function updateEvent(id: number, payload: Omit<CalendarEvent, 'id' | 'created_at'>): CalendarEvent {
+  let updated: CalendarEvent | undefined;
+  save(load().map(e => {
+    if (e.id !== id) return e;
+    // 시간이 바뀌면 알림 재설정
+    const timeChanged = e.start_at !== payload.start_at;
+    updated = { ...e, ...payload, id, notified: timeChanged ? false : payload.notified };
+    return updated;
+  }));
+  return updated!;
+}
+
 export function deleteEvent(id: number) {
   save(load().filter(e => e.id !== id));
 }

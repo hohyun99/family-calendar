@@ -10,7 +10,7 @@ import { ko } from 'date-fns/locale';
 import EventForm from './EventForm';
 import VoiceInput from './VoiceInput';
 import { EventPayload, CalendarEvent } from '@/types/event';
-import { listEvents, addEvent, deleteEvent, getUpcomingEvents, markNotified } from '@/lib/storage';
+import { listEvents, addEvent, updateEvent, deleteEvent, getUpcomingEvents, markNotified } from '@/lib/storage';
 
 const MEMBER_COLORS: Record<string, string> = {
   유찬: 'bg-blue-400',
@@ -56,6 +56,7 @@ export default function Calendar() {
   const [formInitial, setFormInitial] = useState<Partial<EventPayload>>({});
   const [showVoice, setShowVoice] = useState(false);
   const [selectedEvent, setSelectedEvent] = useState<CalendarEvent | null>(null);
+  const [editingEvent, setEditingEvent] = useState<CalendarEvent | null>(null);
 
   const refresh = useCallback(() => setEvents(listEvents()), []);
 
@@ -90,20 +91,50 @@ export default function Calendar() {
   const handleDayClick = (day: Date) => {
     setSelectedDay(day);
     setShowForm(false);
+    setEditingEvent(null);
     setSelectedEvent(null);
   };
 
-  const handleAddEvent = async (data: EventPayload) => {
-    addEvent({
-      title: data.title,
-      member: data.member,
-      start_at: data.start_at,
-      end_at: data.end_at ?? null,
-      all_day: data.all_day,
-      notify: data.notify,
-    });
+  const handleSaveEvent = async (data: EventPayload) => {
+    if (editingEvent) {
+      updateEvent(editingEvent.id, {
+        title: data.title,
+        member: data.member,
+        start_at: data.start_at,
+        end_at: data.end_at ?? null,
+        all_day: data.all_day,
+        notify: data.notify,
+        notified: editingEvent.notified,
+      });
+      setEditingEvent(null);
+    } else {
+      addEvent({
+        title: data.title,
+        member: data.member,
+        start_at: data.start_at,
+        end_at: data.end_at ?? null,
+        all_day: data.all_day,
+        notify: data.notify,
+      });
+    }
     refresh();
     setShowForm(false);
+    setSelectedEvent(null);
+  };
+
+  const handleEditEvent = (event: CalendarEvent) => {
+    setEditingEvent(event);
+    setFormInitial({
+      title: event.title,
+      member: event.member,
+      start_at: event.start_at,
+      end_at: event.end_at ?? undefined,
+      all_day: event.all_day,
+      notify: event.notify,
+    });
+    setShowForm(true);
+    setShowVoice(false);
+    setSelectedEvent(null);
   };
 
   const handleDeleteEvent = (id: number) => {
@@ -115,6 +146,7 @@ export default function Calendar() {
 
   const handleVoiceParsed = (parsed: { title: string; member: string; start_at: string; end_at?: string }) => {
     setFormInitial({ title: parsed.title, member: parsed.member, start_at: parsed.start_at, end_at: parsed.end_at });
+    setEditingEvent(null);
     setShowVoice(false);
     setShowForm(true);
     setSelectedDay(new Date(parsed.start_at));
@@ -226,7 +258,13 @@ export default function Calendar() {
                     </p>
                   )}
                   {selectedEvent?.id === e.id && (
-                    <div className="mt-2 flex justify-end">
+                    <div className="mt-2 flex justify-end gap-3">
+                      <button
+                        onClick={ev => { ev.stopPropagation(); handleEditEvent(e); }}
+                        className="text-xs text-indigo-500 hover:text-indigo-700"
+                      >
+                        수정
+                      </button>
                       <button
                         onClick={ev => { ev.stopPropagation(); handleDeleteEvent(e.id); }}
                         className="text-xs text-red-400 hover:text-red-600"
@@ -241,14 +279,17 @@ export default function Calendar() {
           </div>
         )}
 
-        {/* 이벤트 추가 폼 */}
+        {/* 이벤트 추가/수정 폼 */}
         {showForm && (
           <div className="bg-white rounded-2xl shadow p-4">
-            <h2 className="text-sm font-bold text-gray-700 mb-4">새 일정 추가</h2>
+            <h2 className="text-sm font-bold text-gray-700 mb-4">
+              {editingEvent ? '일정 수정' : '새 일정 추가'}
+            </h2>
             <EventForm
               initial={formInitial}
-              onSubmit={handleAddEvent}
-              onCancel={() => setShowForm(false)}
+              submitLabel={editingEvent ? '수정 저장' : '저장'}
+              onSubmit={handleSaveEvent}
+              onCancel={() => { setShowForm(false); setEditingEvent(null); }}
             />
           </div>
         )}
