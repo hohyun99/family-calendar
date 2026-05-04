@@ -18,7 +18,7 @@ export async function POST(req: NextRequest) {
     .join(' / ');
 
   const response = await ai.models.generateContent({
-    model: 'gemini-2.0-flash',
+    model: 'gemini-2.5-flash',
     contents: `오늘 수원 시간별 날씨: ${summary}
 
 위 날씨를 보고 오늘 하루 외출 시 옷차림을 추천해줘.
