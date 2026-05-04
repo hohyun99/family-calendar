@@ -54,16 +54,27 @@ function pm25Grade(v: number): Grade {
   return               { label: '매우나쁨', color: 'text-red-500',    bar: 'bg-red-400',    face: '🤢' };
 }
 
-function clothingAdvice(temp: number, minTemp: number): { icon: string; items: string[] } {
-  const t = Math.min(temp, minTemp);
-  if (t <= 4)  return { icon: '🧥', items: ['두꺼운 패딩', '목도리', '장갑', '귀마개'] };
-  if (t <= 8)  return { icon: '🧣', items: ['코트', '두꺼운 니트', '목도리'] };
-  if (t <= 11) return { icon: '🧶', items: ['자켓', '니트', '기모 바지'] };
-  if (t <= 16) return { icon: '👕', items: ['가디건', '얇은 니트', '청바지'] };
-  if (t <= 19) return { icon: '👔', items: ['얇은 긴팔', '가디건 (실내)'] };
-  if (t <= 22) return { icon: '👗', items: ['긴팔 셔츠', '면바지'] };
-  if (t <= 27) return { icon: '🩱', items: ['반팔', '얇은 소재'] };
-  return               { icon: '🌞', items: ['반팔·민소매', '통기성 좋은 옷'] };
+function clothingAdvice(temp: number, minTemp: number): { icon: string; items: string[]; extra?: string } {
+  // 현재 기온 기준으로 지금 옷차림 추천
+  let icon: string;
+  let items: string[];
+  if (temp <= 4)       { icon = '🧥'; items = ['두꺼운 패딩', '목도리', '장갑']; }
+  else if (temp <= 8)  { icon = '🧣'; items = ['코트', '두꺼운 니트', '목도리']; }
+  else if (temp <= 11) { icon = '🧶'; items = ['자켓', '니트']; }
+  else if (temp <= 16) { icon = '🧥'; items = ['가디건', '얇은 니트']; }
+  else if (temp <= 19) { icon = '👔'; items = ['얇은 긴팔', '가디건']; }
+  else if (temp <= 23) { icon = '👗'; items = ['반팔', '얇은 긴팔']; }
+  else if (temp <= 27) { icon = '🩱'; items = ['반팔']; }
+  else                 { icon = '🌞'; items = ['반팔·민소매']; }
+
+  // 저녁에 크게 추워지면 추가 안내
+  let extra: string | undefined;
+  if (temp - minTemp >= 10)
+    extra = `저녁 ${minTemp}°C — 겉옷 챙기세요`;
+  else if (temp - minTemp >= 7 && minTemp <= 15)
+    extra = `저녁엔 얇은 겉옷 필요`;
+
+  return { icon, items, extra };
 }
 
 function umbrellaAdvice(maxPrecipProb: number, codes: number[]): { need: boolean; icon: string; text: string } {
@@ -180,6 +191,7 @@ export default function WeatherWidget() {
         <div className="flex-1 bg-sky-50 rounded-xl px-3 py-2">
           <p className="text-[10px] text-sky-400 font-semibold mb-1">{clothing.icon} 오늘 옷차림</p>
           <p className="text-xs text-sky-700">{clothing.items.join(' · ')}</p>
+          {clothing.extra && <p className="text-[10px] text-orange-400 mt-0.5">{clothing.extra}</p>}
         </div>
         <div className={`flex-1 rounded-xl px-3 py-2 ${umbrella.need ? 'bg-indigo-50' : 'bg-gray-50'}`}>
           <p className={`text-[10px] font-semibold mb-1 ${umbrella.need ? 'text-indigo-400' : 'text-gray-400'}`}>
