@@ -511,7 +511,7 @@ export default function Calendar() {
                     <span className="text-sm font-medium text-gray-800 flex-1">{e.title}</span>
                     {e.recurrence !== 'none' && (
                       <span className="text-[10px] bg-teal-100 text-teal-600 rounded-full px-1.5 py-0.5">
-                        {{ daily:'매일', weekly:'매주', monthly:'매월' }[e.recurrence as Recurrence]}
+                        {({'daily':'매일', 'weekly':'매주', 'monthly':'매월'} as Record<string,string>)[e.recurrence]}
                       </span>
                     )}
                     {e.notify && e.recurrence === 'none' && <span className="text-xs text-gray-400">🔔</span>}
