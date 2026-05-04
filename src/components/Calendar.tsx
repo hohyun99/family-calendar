@@ -262,7 +262,7 @@ export default function Calendar() {
     // 시작일 이전에는 표시하지 않음
     if (day < new Date(start.getFullYear(), start.getMonth(), start.getDate())) return false;
     switch (e.recurrence) {
-      case 'daily':   return !getHoliday(day);
+      case 'daily':   return day.getDay() !== 0 && day.getDay() !== 6 && !getHoliday(day);
       case 'weekly':  return day.getDay() === start.getDay();
       case 'monthly': return day.getDate() === start.getDate();
       default:        return isSameDay(start, day);
