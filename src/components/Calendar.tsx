@@ -311,8 +311,8 @@ export default function Calendar() {
     { name: '아빠', card: 'bg-orange-50 border-orange-100', dot: 'bg-orange-400', label: 'text-orange-700' },
   ] as const;
   const memberDayEvents = (name: string) =>
-    events
-      .filter(e => e.member === name && isSameDay(parseISO(e.start_at), focusDay))
+    eventsOnDay(focusDay)
+      .filter(e => e.member === name)
       .sort((a, b) => a.start_at.localeCompare(b.start_at));
 
   return (
