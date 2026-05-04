@@ -272,13 +272,17 @@ export default function Calendar() {
   };
 
   const todayEvents = selectedDay ? eventsOnDay(selectedDay) : [];
-  const today = new Date();
-  const yuchanToday = events
-    .filter(e => e.member === '유찬' && isSameDay(parseISO(e.start_at), today))
-    .sort((a, b) => a.start_at.localeCompare(b.start_at));
-  const yujuToday = events
-    .filter(e => e.member === '유주' && isSameDay(parseISO(e.start_at), today))
-    .sort((a, b) => a.start_at.localeCompare(b.start_at));
+  const focusDay = selectedDay ?? new Date();
+  const MEMBERS_CONFIG = [
+    { name: '유찬', card: 'bg-blue-50 border-blue-100',   dot: 'bg-blue-400',   label: 'text-blue-700' },
+    { name: '유주', card: 'bg-pink-50 border-pink-100',   dot: 'bg-pink-400',   label: 'text-pink-700' },
+    { name: '엄마', card: 'bg-green-50 border-green-100', dot: 'bg-green-400',  label: 'text-green-700' },
+    { name: '아빠', card: 'bg-orange-50 border-orange-100', dot: 'bg-orange-400', label: 'text-orange-700' },
+  ] as const;
+  const memberDayEvents = (name: string) =>
+    events
+      .filter(e => e.member === name && isSameDay(parseISO(e.start_at), focusDay))
+      .sort((a, b) => a.start_at.localeCompare(b.start_at));
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-indigo-50 to-pink-50 p-4">
@@ -295,29 +299,27 @@ export default function Calendar() {
         {/* 날씨 */}
         <WeatherWidget />
 
-        {/* 오늘의 주요 일정 */}
+        {/* 주요 일정 (선택 날짜, 기본=오늘) */}
         <div className="bg-white rounded-2xl shadow p-4">
           <h2 className="text-sm font-bold text-gray-700 mb-3">
-            오늘 {format(today, 'M월 d일 (E)', { locale: ko })} 주요 일정
+            {format(focusDay, 'M월 d일 (E)', { locale: ko })} 주요 일정
           </h2>
-          <div className="grid grid-cols-2 gap-3">
-            {(['유찬', '유주'] as const).map(name => {
-              const list = name === '유찬' ? yuchanToday : yujuToday;
-              const color = name === '유찬' ? 'text-blue-600 bg-blue-50 border-blue-100' : 'text-pink-600 bg-pink-50 border-pink-100';
-              const dot   = name === '유찬' ? 'bg-blue-400' : 'bg-pink-400';
+          <div className="grid grid-cols-2 gap-2">
+            {MEMBERS_CONFIG.map(({ name, card, dot, label }) => {
+              const list = memberDayEvents(name);
               return (
-                <div key={name} className={`rounded-xl border p-3 ${color}`}>
+                <div key={name} className={`rounded-xl border p-3 ${card}`}>
                   <div className="flex items-center gap-1.5 mb-2">
                     <span className={`w-2 h-2 rounded-full ${dot}`} />
-                    <span className="text-xs font-bold">{name}</span>
+                    <span className={`text-xs font-bold ${label}`}>{name}</span>
                   </div>
                   {list.length === 0
-                    ? <p className="text-xs opacity-50">일정 없음</p>
+                    ? <p className="text-xs text-gray-400">일정 없음</p>
                     : list.map(e => (
                       <div key={e.id} className="mb-1.5 last:mb-0">
                         <p className="text-xs font-medium text-gray-800 leading-tight">{e.title}</p>
                         {!e.all_day && (
-                          <p className="text-[11px] opacity-60">
+                          <p className="text-[11px] text-gray-400">
                             {format(parseISO(e.start_at), 'a h:mm', { locale: ko })}
                           </p>
                         )}
@@ -360,12 +362,20 @@ export default function Calendar() {
         {/* 버튼 */}
         <div className="flex gap-2">
           <button
-            onClick={() => { setShowVoice(v => !v); setShowForm(false); }}
-            className={`flex-1 shadow rounded-2xl py-3 text-sm font-medium transition flex items-center justify-center gap-2 ${showVoice ? 'bg-indigo-100 text-indigo-700' : 'bg-white text-indigo-600 hover:bg-indigo-50'}`}
+            onClick={() => { setShowVoice(v => !v); setShowForm(false); setEditingEvent(null); }}
+            className={`flex-1 shadow rounded-2xl py-3 text-sm font-medium transition flex items-center justify-center gap-2 active:scale-95 ${
+              showVoice
+                ? 'bg-indigo-500 text-white ring-2 ring-indigo-300'
+                : 'bg-white text-indigo-600 hover:bg-indigo-50'
+            }`}
           >🎤 음성으로 추가</button>
           <button
-            onClick={() => { setFormInitial({}); setShowForm(true); setShowVoice(false); setEditingEvent(null); }}
-            className="flex-1 bg-indigo-500 shadow rounded-2xl py-3 text-sm font-medium text-white hover:bg-indigo-600 transition flex items-center justify-center gap-2"
+            onClick={() => { setFormInitial({}); setShowForm(s => !s); setShowVoice(false); setEditingEvent(null); }}
+            className={`flex-1 shadow rounded-2xl py-3 text-sm font-medium transition flex items-center justify-center gap-2 active:scale-95 ${
+              showForm && !editingEvent
+                ? 'bg-indigo-700 text-white ring-2 ring-indigo-300'
+                : 'bg-indigo-500 text-white hover:bg-indigo-600'
+            }`}
           >✚ 직접 입력</button>
         </div>
 
