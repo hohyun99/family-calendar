@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import { Plus, Trash2, PartyPopper } from 'lucide-react';
 import { Anniversary, addAnniversary, deleteAnniversary } from '@/lib/anniversaries';
 
 const EMOJI_OPTIONS = ['🎂', '💑', '🎉', '💍', '🌸', '🏆', '🎁', '❤️', '⭐', '🌟'];
@@ -41,13 +42,15 @@ export default function AnniversaryPanel({ list, onChanged }: Props) {
   return (
     <div className="bg-white rounded-2xl shadow p-4 space-y-3">
       <div className="flex items-center justify-between">
-        <h2 className="text-sm font-bold text-gray-700">🎉 기념일 관리</h2>
+        <h2 className="text-sm font-bold text-gray-700 flex items-center gap-2">
+          <PartyPopper size={15} className="text-purple-500" /> 기념일 관리
+        </h2>
         {!adding && (
           <button
             onClick={() => setAdding(true)}
-            className="text-xs bg-purple-100 text-purple-600 hover:bg-purple-200 px-3 py-1 rounded-lg transition"
+            className="flex items-center gap-1 text-xs bg-purple-100 text-purple-600 hover:bg-purple-200 px-3 py-1 rounded-lg transition"
           >
-            + 추가
+            <Plus size={12} /> 추가
           </button>
         )}
       </div>
@@ -128,8 +131,8 @@ export default function AnniversaryPanel({ list, onChanged }: Props) {
               </div>
               <button
                 onClick={() => handleDelete(a.id)}
-                className="text-xs text-red-400 hover:text-red-600 transition"
-              >삭제</button>
+                className="flex items-center gap-1 text-xs text-red-400 hover:text-red-600 bg-red-50 hover:bg-red-100 px-2 py-1 rounded-lg transition"
+              ><Trash2 size={11} /> 삭제</button>
             </div>
           ))}
         </div>

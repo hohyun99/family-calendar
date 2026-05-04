@@ -6,6 +6,11 @@ import {
   eachDayOfInterval, isSameMonth, isSameDay, format, addMonths, subMonths, parseISO
 } from 'date-fns';
 import { ko } from 'date-fns/locale';
+import {
+  ChevronLeft, ChevronRight, Mic, Plus, Gift,
+  Bell, BellOff, Volume2, CalendarDays, Pencil, Trash2,
+  RefreshCw, Flag, PartyPopper,
+} from 'lucide-react';
 import EventForm from './EventForm';
 import VoiceInput from './VoiceInput';
 import WeatherWidget from './WeatherWidget';
@@ -315,8 +320,8 @@ export default function Calendar() {
       {/* 토스트 */}
       <div className="fixed top-4 left-1/2 -translate-x-1/2 z-50 flex flex-col gap-2 w-full max-w-sm px-4 pointer-events-none">
         {toasts.map(t => (
-          <div key={t.id} className="bg-gray-900 text-white text-sm rounded-2xl px-4 py-3 shadow-xl">
-            🔔 {t.message}
+          <div key={t.id} className="bg-gray-900 text-white text-sm rounded-2xl px-4 py-3 shadow-xl flex items-center gap-2">
+            <Bell size={14} className="shrink-0" /> {t.message}
           </div>
         ))}
       </div>
@@ -327,8 +332,10 @@ export default function Calendar() {
 
         {/* 공휴일 배너 */}
         {focusHoliday && (
-          <div className="bg-red-50 border border-red-100 rounded-2xl px-4 py-3 flex items-center gap-2">
-            <span className="text-lg">🎌</span>
+          <div className="bg-red-50 border border-red-100 rounded-2xl px-4 py-3 flex items-center gap-3">
+            <div className="w-8 h-8 rounded-full bg-red-100 flex items-center justify-center shrink-0">
+              <Flag size={15} className="text-red-500" />
+            </div>
             <div>
               <p className="text-sm font-bold text-red-600">{focusHoliday}</p>
               <p className="text-xs text-red-400">{format(focusDay, 'M월 d일 (E)', { locale: ko })} 공휴일</p>
@@ -338,8 +345,10 @@ export default function Calendar() {
 
         {/* 기념일 배너 */}
         {focusAnniversaries.map(a => (
-          <div key={a.id} className="bg-purple-50 border border-purple-100 rounded-2xl px-4 py-3 flex items-center gap-2">
-            <span className="text-lg">{a.emoji}</span>
+          <div key={a.id} className="bg-purple-50 border border-purple-100 rounded-2xl px-4 py-3 flex items-center gap-3">
+            <div className="w-8 h-8 rounded-full bg-purple-100 flex items-center justify-center shrink-0 text-lg">
+              {a.emoji}
+            </div>
             <div>
               <p className="text-sm font-bold text-purple-700">{a.title}</p>
               <p className="text-xs text-purple-400">{a.month}월 {a.day}일 기념일</p>
@@ -382,28 +391,32 @@ export default function Calendar() {
 
         {/* 헤더 */}
         <div className="bg-white rounded-2xl shadow p-4 flex items-center justify-between">
-          <button onClick={() => setCurrentMonth(subMonths(currentMonth, 1))} className="text-gray-400 hover:text-gray-700 text-xl px-2">‹</button>
+          <button onClick={() => setCurrentMonth(subMonths(currentMonth, 1))} className="w-8 h-8 flex items-center justify-center rounded-full text-gray-400 hover:text-gray-700 hover:bg-gray-100 transition">
+            <ChevronLeft size={20} />
+          </button>
           <h1 className="text-lg font-bold text-gray-800">{format(currentMonth, 'yyyy년 M월', { locale: ko })}</h1>
-          <button onClick={() => setCurrentMonth(addMonths(currentMonth, 1))} className="text-gray-400 hover:text-gray-700 text-xl px-2">›</button>
+          <button onClick={() => setCurrentMonth(addMonths(currentMonth, 1))} className="w-8 h-8 flex items-center justify-center rounded-full text-gray-400 hover:text-gray-700 hover:bg-gray-100 transition">
+            <ChevronRight size={20} />
+          </button>
         </div>
 
         {/* 알림 배너 */}
         {!pushGranted ? (
           <button
             onClick={setupNotifications}
-            className="bg-amber-50 border border-amber-200 rounded-2xl px-4 py-3 flex items-center gap-2 text-sm text-amber-700 w-full hover:bg-amber-100 transition"
+            className="bg-amber-50 border border-amber-200 rounded-2xl px-4 py-3 flex items-center gap-3 text-sm text-amber-700 w-full hover:bg-amber-100 transition"
           >
-            <span>🔔</span>
+            <BellOff size={16} className="shrink-0" />
             <span>여기를 눌러 알림을 허용해 주세요 — 탭이 닫혀도 알려드려요</span>
           </button>
         ) : (
-          <div className="bg-green-50 border border-green-200 rounded-2xl px-4 py-3 flex items-center gap-2 text-sm text-green-700">
-            <span>🔔</span>
+          <div className="bg-green-50 border border-green-200 rounded-2xl px-4 py-3 flex items-center gap-3 text-sm text-green-700">
+            <Bell size={16} className="shrink-0" />
             <span className="flex-1">알림 켜짐 — 탭이 닫혀도 10분 전에 알려드려요</span>
             <button
               onClick={() => { initAudio(); playBeep(); speakText('유찬아, 알림 테스트예요!'); }}
-              className="text-xs bg-green-100 hover:bg-green-200 px-2 py-1 rounded-lg transition whitespace-nowrap"
-            >소리 테스트</button>
+              className="flex items-center gap-1 text-xs bg-green-100 hover:bg-green-200 px-2 py-1 rounded-lg transition whitespace-nowrap"
+            ><Volume2 size={12} /> 소리 테스트</button>
           </div>
         )}
 
@@ -416,7 +429,7 @@ export default function Calendar() {
                 ? 'bg-indigo-500 text-white ring-2 ring-indigo-300'
                 : 'bg-white text-indigo-600 hover:bg-indigo-50'
             }`}
-          >🎤 음성으로 추가</button>
+          ><Mic size={15} /> 음성 입력</button>
           <button
             onClick={() => { setFormInitial({}); setShowForm(s => !s); setShowVoice(false); setShowAnniversary(false); setEditingEvent(null); }}
             className={`flex-1 shadow rounded-2xl py-3 text-sm font-medium transition flex items-center justify-center gap-2 active:scale-95 ${
@@ -424,15 +437,15 @@ export default function Calendar() {
                 ? 'bg-indigo-700 text-white ring-2 ring-indigo-300'
                 : 'bg-indigo-500 text-white hover:bg-indigo-600'
             }`}
-          >✚ 직접 입력</button>
+          ><Plus size={15} /> 일정 추가</button>
           <button
             onClick={() => { setShowAnniversary(s => !s); setShowForm(false); setShowVoice(false); setEditingEvent(null); }}
-            className={`shadow rounded-2xl py-3 px-4 text-sm font-medium transition flex items-center justify-center gap-1 active:scale-95 ${
+            className={`shadow rounded-2xl py-3 px-4 text-sm font-medium transition flex items-center justify-center gap-1.5 active:scale-95 ${
               showAnniversary
                 ? 'bg-purple-600 text-white ring-2 ring-purple-300'
                 : 'bg-white text-purple-600 hover:bg-purple-50'
             }`}
-          >🎉 기념일</button>
+          ><Gift size={15} /> 기념일</button>
         </div>
 
         {showVoice && <VoiceInput onParsed={handleVoiceParsed} />}
@@ -510,11 +523,12 @@ export default function Calendar() {
                     <span className={`text-xs font-semibold ${MEMBER_TEXT[e.member] ?? 'text-gray-600'}`}>{e.member}</span>
                     <span className="text-sm font-medium text-gray-800 flex-1">{e.title}</span>
                     {e.recurrence !== 'none' && (
-                      <span className="text-[10px] bg-teal-100 text-teal-600 rounded-full px-1.5 py-0.5">
+                      <span className="flex items-center gap-0.5 text-[10px] bg-teal-100 text-teal-600 rounded-full px-1.5 py-0.5">
+                        <RefreshCw size={9} />
                         {({'daily':'매일', 'weekly':'매주', 'monthly':'매월'} as Record<string,string>)[e.recurrence]}
                       </span>
                     )}
-                    {e.notify && e.recurrence === 'none' && <span className="text-xs text-gray-400">🔔</span>}
+                    {e.notify && e.recurrence === 'none' && <Bell size={12} className="text-gray-400 shrink-0" />}
                   </div>
                   {!e.all_day && (
                     <p className="text-xs text-gray-400 mt-1 ml-4">
@@ -523,9 +537,13 @@ export default function Calendar() {
                     </p>
                   )}
                   {selectedEvent?.id === e.id && (
-                    <div className="mt-2 flex justify-end gap-3">
-                      <button onClick={ev => { ev.stopPropagation(); handleEditEvent(e); }} className="text-xs text-indigo-500 hover:text-indigo-700">수정</button>
-                      <button onClick={ev => { ev.stopPropagation(); handleDeleteEvent(e.id); }} className="text-xs text-red-400 hover:text-red-600">삭제</button>
+                    <div className="mt-2 flex justify-end gap-2">
+                      <button onClick={ev => { ev.stopPropagation(); handleEditEvent(e); }} className="flex items-center gap-1 text-xs text-indigo-500 hover:text-indigo-700 bg-indigo-50 hover:bg-indigo-100 px-2 py-1 rounded-lg transition">
+                        <Pencil size={11} /> 수정
+                      </button>
+                      <button onClick={ev => { ev.stopPropagation(); handleDeleteEvent(e.id); }} className="flex items-center gap-1 text-xs text-red-400 hover:text-red-600 bg-red-50 hover:bg-red-100 px-2 py-1 rounded-lg transition">
+                        <Trash2 size={11} /> 삭제
+                      </button>
                     </div>
                   )}
                 </div>
@@ -537,7 +555,10 @@ export default function Calendar() {
         {/* 폼 */}
         {showForm && (
           <div className="bg-white rounded-2xl shadow p-4">
-            <h2 className="text-sm font-bold text-gray-700 mb-4">{editingEvent ? '일정 수정' : '새 일정 추가'}</h2>
+            <h2 className="text-sm font-bold text-gray-700 mb-4 flex items-center gap-2">
+              <CalendarDays size={15} className="text-indigo-500" />
+              {editingEvent ? '일정 수정' : '새 일정 추가'}
+            </h2>
             <EventForm
               initial={formInitial}
               submitLabel={editingEvent ? '수정 저장' : '저장'}
