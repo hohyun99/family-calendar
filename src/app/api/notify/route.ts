@@ -22,8 +22,7 @@ const MEMBER_CALL: Record<string, string> = {
   아빠: '자기야',
 };
 
-// 외부 크론(cron-job.org 등)에서 1분마다 POST /api/notify 호출
-export async function POST() {
+async function runNotify() {
   const now = new Date();
   const from = new Date(now.getTime() + 8  * 60 * 1000).toISOString();
   const to   = new Date(now.getTime() + 12 * 60 * 1000).toISOString();
@@ -67,3 +66,6 @@ export async function POST() {
 
   return NextResponse.json({ notified });
 }
+
+export async function GET()  { return runNotify(); }
+export async function POST() { return runNotify(); }
