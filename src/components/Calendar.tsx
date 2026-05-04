@@ -158,6 +158,17 @@ export default function Calendar() {
     return () => { released = true; };
   }, []);
 
+  // ── 알림 발화 (중복 방지용 Set) ────────────────────────────────────────
+  const firedRef = useRef<Set<string>>(new Set());
+
+  const maybeFire = useCallback(async (ev: CalendarEvent) => {
+    if (firedRef.current.has(ev.id)) return;
+    firedRef.current.add(ev.id);
+    fireVoice(ev);
+    await markNotified(ev.id);
+    refresh();
+  }, [fireVoice, refresh]);
+
   // ── 정확한 setTimeout 예약 ─────────────────────────────────────────────
   useEffect(() => {
     const timers: ReturnType<typeof setTimeout>[] = [];
@@ -166,15 +177,45 @@ export default function Calendar() {
       if (!ev.notify || ev.notified || ev.all_day) continue;
       const delay = new Date(ev.start_at).getTime() - 10 * 60 * 1000 - now;
       if (delay >= 0 && delay < 24 * 60 * 60 * 1000) {
-        timers.push(setTimeout(async () => {
-          fireVoice(ev);
-          await markNotified(ev.id);
-          refresh();
-        }, delay));
+        timers.push(setTimeout(() => maybeFire(ev), delay));
       }
     }
     return () => timers.forEach(clearTimeout);
-  }, [events, fireVoice, refresh]);
+  }, [events, maybeFire]);
+
+  // ── 탭 복귀 시 놓친 알림 체크 ─────────────────────────────────────────
+  useEffect(() => {
+    const check = async () => {
+      if (document.visibilityState !== 'visible') return;
+      await refresh();
+      const now = Date.now();
+      for (const ev of events) {
+        if (!ev.notify || ev.notified || ev.all_day) continue;
+        const fireAt = new Date(ev.start_at).getTime() - 10 * 60 * 1000;
+        // 놓친 알림: 지금보다 최대 5분 전까지
+        if (fireAt <= now && fireAt >= now - 5 * 60 * 1000) {
+          maybeFire(ev);
+        }
+      }
+    };
+    document.addEventListener('visibilitychange', check);
+    return () => document.removeEventListener('visibilitychange', check);
+  }, [events, maybeFire, refresh]);
+
+  // ── 60초 폴링 (setTimeout 보조) ────────────────────────────────────────
+  useEffect(() => {
+    const id = setInterval(async () => {
+      const now = Date.now();
+      for (const ev of events) {
+        if (!ev.notify || ev.notified || ev.all_day) continue;
+        const fireAt = new Date(ev.start_at).getTime() - 10 * 60 * 1000;
+        if (fireAt <= now && fireAt >= now - 60 * 1000) {
+          maybeFire(ev);
+        }
+      }
+    }, 30_000);
+    return () => clearInterval(id);
+  }, [events, maybeFire]);
 
   // ── 알림 권한 + Service Worker 초기화 ─────────────────────────────────
   const setupNotifications = async () => {
