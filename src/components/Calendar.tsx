@@ -10,7 +10,7 @@ import EventForm from './EventForm';
 import VoiceInput from './VoiceInput';
 import WeatherWidget from './WeatherWidget';
 import AnniversaryPanel from './AnniversaryPanel';
-import { CalendarEvent, EventPayload } from '@/types/event';
+import { CalendarEvent, EventPayload, Recurrence } from '@/lib/db';
 import { listEvents, addEvent, updateEvent, deleteEvent, markNotified } from '@/lib/db';
 import { Anniversary, listAnniversaries, anniversariesOnDay } from '@/lib/anniversaries';
 import { supabase } from '@/lib/supabase';
@@ -186,7 +186,7 @@ export default function Calendar() {
     const timers: ReturnType<typeof setTimeout>[] = [];
     const now = Date.now();
     for (const ev of events) {
-      if (!ev.notify || ev.notified || ev.all_day) continue;
+      if (!ev.notify || ev.notified || ev.all_day || ev.recurrence !== 'none') continue;
       const delay = new Date(ev.start_at).getTime() - 10 * 60 * 1000 - now;
       if (delay >= 0 && delay < 24 * 60 * 60 * 1000) {
         timers.push(setTimeout(() => maybeFire(ev), delay));
@@ -202,7 +202,7 @@ export default function Calendar() {
       await refresh();
       const now = Date.now();
       for (const ev of events) {
-        if (!ev.notify || ev.notified || ev.all_day) continue;
+        if (!ev.notify || ev.notified || ev.all_day || ev.recurrence !== 'none') continue;
         const fireAt = new Date(ev.start_at).getTime() - 10 * 60 * 1000;
         // 놓친 알림: 지금보다 최대 5분 전까지
         if (fireAt <= now && fireAt >= now - 5 * 60 * 1000) {
@@ -219,7 +219,7 @@ export default function Calendar() {
     const id = setInterval(async () => {
       const now = Date.now();
       for (const ev of events) {
-        if (!ev.notify || ev.notified || ev.all_day) continue;
+        if (!ev.notify || ev.notified || ev.all_day || ev.recurrence !== 'none') continue;
         const fireAt = new Date(ev.start_at).getTime() - 10 * 60 * 1000;
         if (fireAt <= now && fireAt >= now - 60 * 1000) {
           maybeFire(ev);
@@ -251,7 +251,18 @@ export default function Calendar() {
     start: startOfWeek(startOfMonth(currentMonth), { weekStartsOn: 0 }),
     end:   endOfWeek(endOfMonth(currentMonth), { weekStartsOn: 0 }),
   });
-  const eventsOnDay = (day: Date) => events.filter(e => isSameDay(parseISO(e.start_at), day));
+
+  const eventsOnDay = (day: Date) => events.filter(e => {
+    const start = parseISO(e.start_at);
+    // 시작일 이전에는 표시하지 않음
+    if (day < new Date(start.getFullYear(), start.getMonth(), start.getDate())) return false;
+    switch (e.recurrence) {
+      case 'daily':   return true;
+      case 'weekly':  return day.getDay() === start.getDay();
+      case 'monthly': return day.getDate() === start.getDate();
+      default:        return isSameDay(start, day);
+    }
+  });
 
   // ── 이벤트 핸들러 ──────────────────────────────────────────────────────
   const handleSaveEvent = async (data: EventPayload) => {
@@ -498,7 +509,12 @@ export default function Calendar() {
                     <span className={`w-2 h-2 rounded-full ${MEMBER_COLORS[e.member] ?? 'bg-gray-400'}`} />
                     <span className={`text-xs font-semibold ${MEMBER_TEXT[e.member] ?? 'text-gray-600'}`}>{e.member}</span>
                     <span className="text-sm font-medium text-gray-800 flex-1">{e.title}</span>
-                    {e.notify && <span className="text-xs text-gray-400">🔔</span>}
+                    {e.recurrence !== 'none' && (
+                      <span className="text-[10px] bg-teal-100 text-teal-600 rounded-full px-1.5 py-0.5">
+                        {{ daily:'매일', weekly:'매주', monthly:'매월' }[e.recurrence as Recurrence]}
+                      </span>
+                    )}
+                    {e.notify && e.recurrence === 'none' && <span className="text-xs text-gray-400">🔔</span>}
                   </div>
                   {!e.all_day && (
                     <p className="text-xs text-gray-400 mt-1 ml-4">

@@ -9,6 +9,7 @@ CREATE TABLE IF NOT EXISTS public.events (
   all_day     BOOLEAN     NOT NULL DEFAULT FALSE,
   notify      BOOLEAN     NOT NULL DEFAULT TRUE,
   notified    BOOLEAN     NOT NULL DEFAULT FALSE,
+  recurrence  TEXT        NOT NULL DEFAULT 'none', -- none | daily | weekly | monthly
   created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 

@@ -1,5 +1,7 @@
 import { supabase } from './supabase';
 
+export type Recurrence = 'none' | 'daily' | 'weekly' | 'monthly';
+
 export interface CalendarEvent {
   id: string;
   title: string;
@@ -9,6 +11,7 @@ export interface CalendarEvent {
   all_day: boolean;
   notify: boolean;
   notified: boolean;
+  recurrence: Recurrence;
   created_at: string;
 }
 

@@ -1,9 +1,16 @@
 'use client';
 
 import { useState } from 'react';
-import { EventPayload } from '@/types/event';
+import { EventPayload, Recurrence } from '@/lib/db';
 
 const MEMBERS = ['유찬', '유주', '엄마', '아빠'];
+
+const RECURRENCE_OPTIONS: { value: Recurrence; label: string }[] = [
+  { value: 'none',    label: '반복 없음' },
+  { value: 'daily',   label: '매일' },
+  { value: 'weekly',  label: '매주' },
+  { value: 'monthly', label: '매월' },
+];
 
 interface Props {
   initial?: Partial<EventPayload>;
@@ -34,7 +41,10 @@ export default function EventForm({ initial, submitLabel = '저장', onSubmit, o
   const [endAt, setEndAt] = useState(initial?.end_at ? toLocalDatetimeValue(initial.end_at) : '');
   const [allDay, setAllDay] = useState(initial?.all_day ?? false);
   const [notify, setNotify] = useState(initial?.notify ?? true);
+  const [recurrence, setRecurrence] = useState<Recurrence>(initial?.recurrence ?? 'none');
   const [loading, setLoading] = useState(false);
+
+  const isRecurring = recurrence !== 'none';
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -46,7 +56,8 @@ export default function EventForm({ initial, submitLabel = '저장', onSubmit, o
         start_at: localToIso(startAt),
         end_at: endAt ? localToIso(endAt) : null,
         all_day: allDay,
-        notify,
+        notify: isRecurring ? false : notify,
+        recurrence,
       });
     } finally {
       setLoading(false);
@@ -86,6 +97,27 @@ export default function EventForm({ initial, submitLabel = '저장', onSubmit, o
         </div>
       </div>
 
+      {/* 반복 */}
+      <div>
+        <label className="block text-sm font-medium text-gray-700 mb-1">반복</label>
+        <div className="flex gap-2 flex-wrap">
+          {RECURRENCE_OPTIONS.map(o => (
+            <button
+              key={o.value}
+              type="button"
+              onClick={() => setRecurrence(o.value)}
+              className={`px-3 py-1.5 rounded-full text-sm font-medium transition ${
+                recurrence === o.value
+                  ? 'bg-teal-500 text-white'
+                  : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+              }`}
+            >
+              {o.label}
+            </button>
+          ))}
+        </div>
+      </div>
+
       <div className="flex items-center gap-2">
         <input type="checkbox" id="allDay" checked={allDay} onChange={e => setAllDay(e.target.checked)} />
         <label htmlFor="allDay" className="text-sm text-gray-700">하루 종일</label>
@@ -94,7 +126,9 @@ export default function EventForm({ initial, submitLabel = '저장', onSubmit, o
       {!allDay && (
         <div className="grid grid-cols-2 gap-3">
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">시작</label>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              {isRecurring ? '시작 날짜 / 시간' : '시작'}
+            </label>
             <input
               type="datetime-local"
               required
@@ -117,7 +151,9 @@ export default function EventForm({ initial, submitLabel = '저장', onSubmit, o
 
       {allDay && (
         <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">날짜</label>
+          <label className="block text-sm font-medium text-gray-700 mb-1">
+            {isRecurring ? '시작 날짜' : '날짜'}
+          </label>
           <input
             type="date"
             required
@@ -128,10 +164,12 @@ export default function EventForm({ initial, submitLabel = '저장', onSubmit, o
         </div>
       )}
 
-      <div className="flex items-center gap-2">
-        <input type="checkbox" id="notify" checked={notify} onChange={e => setNotify(e.target.checked)} />
-        <label htmlFor="notify" className="text-sm text-gray-700">10분 전 알림</label>
-      </div>
+      {!isRecurring && (
+        <div className="flex items-center gap-2">
+          <input type="checkbox" id="notify" checked={notify} onChange={e => setNotify(e.target.checked)} />
+          <label htmlFor="notify" className="text-sm text-gray-700">10분 전 알림</label>
+        </div>
+      )}
 
       <div className="flex gap-2 pt-2">
         <button
