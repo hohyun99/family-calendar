@@ -9,8 +9,10 @@ import { ko } from 'date-fns/locale';
 import EventForm from './EventForm';
 import VoiceInput from './VoiceInput';
 import WeatherWidget from './WeatherWidget';
+import AnniversaryPanel from './AnniversaryPanel';
 import { CalendarEvent, EventPayload } from '@/types/event';
 import { listEvents, addEvent, updateEvent, deleteEvent, markNotified } from '@/lib/db';
+import { Anniversary, listAnniversaries, anniversariesOnDay } from '@/lib/anniversaries';
 import { supabase } from '@/lib/supabase';
 import { getHoliday } from '@/lib/holidays';
 
@@ -90,8 +92,10 @@ async function subscribeToPush() {
 export default function Calendar() {
   const [currentMonth, setCurrentMonth] = useState(new Date());
   const [events, setEvents] = useState<CalendarEvent[]>([]);
+  const [anniversaries, setAnniversaries] = useState<Anniversary[]>([]);
   const [selectedDay, setSelectedDay] = useState<Date | null>(null);
   const [showForm, setShowForm] = useState(false);
+  const [showAnniversary, setShowAnniversary] = useState(false);
   const [formInitial, setFormInitial] = useState<Partial<EventPayload>>({});
   const [showVoice, setShowVoice] = useState(false);
   const [selectedEvent, setSelectedEvent] = useState<CalendarEvent | null>(null);
@@ -112,13 +116,18 @@ export default function Calendar() {
     addToast(`${call} ${ev.title} 할 시간이에요! 10분 후 시작해요.`);
   }, [addToast]);
 
-  // ── 이벤트 로드 ────────────────────────────────────────────────────────
+  // ── 이벤트 + 기념일 로드 ───────────────────────────────────────────────
   const refresh = useCallback(async () => {
     const data = await listEvents();
     setEvents(data);
   }, []);
 
-  useEffect(() => { refresh(); }, [refresh]);
+  const refreshAnniversaries = useCallback(async () => {
+    const data = await listAnniversaries();
+    setAnniversaries(data);
+  }, []);
+
+  useEffect(() => { refresh(); refreshAnniversaries(); }, [refresh, refreshAnniversaries]);
 
   // ── Supabase Realtime — 모든 기기 실시간 동기화 ────────────────────────
   useEffect(() => {
@@ -127,9 +136,12 @@ export default function Calendar() {
       .on('postgres_changes', { event: '*', schema: 'public', table: 'events' }, () => {
         refresh();
       })
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'anniversaries' }, () => {
+        refreshAnniversaries();
+      })
       .subscribe();
     return () => { supabase.removeChannel(channel); };
-  }, [refresh]);
+  }, [refresh, refreshAnniversaries]);
 
   // ── Service Worker 메시지 수신 (SW → 탭 TTS) ───────────────────────────
   useEffect(() => {
@@ -275,6 +287,7 @@ export default function Calendar() {
   const todayEvents = selectedDay ? eventsOnDay(selectedDay) : [];
   const focusDay = selectedDay ?? new Date();
   const focusHoliday = getHoliday(focusDay);
+  const focusAnniversaries = anniversariesOnDay(anniversaries, focusDay);
   const MEMBERS_CONFIG = [
     { name: '유찬', card: 'bg-blue-50 border-blue-100',   dot: 'bg-blue-400',   label: 'text-blue-700' },
     { name: '유주', card: 'bg-pink-50 border-pink-100',   dot: 'bg-pink-400',   label: 'text-pink-700' },
@@ -311,6 +324,17 @@ export default function Calendar() {
             </div>
           </div>
         )}
+
+        {/* 기념일 배너 */}
+        {focusAnniversaries.map(a => (
+          <div key={a.id} className="bg-purple-50 border border-purple-100 rounded-2xl px-4 py-3 flex items-center gap-2">
+            <span className="text-lg">{a.emoji}</span>
+            <div>
+              <p className="text-sm font-bold text-purple-700">{a.title}</p>
+              <p className="text-xs text-purple-400">{a.month}월 {a.day}일 기념일</p>
+            </div>
+          </div>
+        ))}
 
         {/* 주요 일정 (선택 날짜, 기본=오늘) */}
         <div className="bg-white rounded-2xl shadow p-4">
@@ -375,7 +399,7 @@ export default function Calendar() {
         {/* 버튼 */}
         <div className="flex gap-2">
           <button
-            onClick={() => { setShowVoice(v => !v); setShowForm(false); setEditingEvent(null); }}
+            onClick={() => { setShowVoice(v => !v); setShowForm(false); setShowAnniversary(false); setEditingEvent(null); }}
             className={`flex-1 shadow rounded-2xl py-3 text-sm font-medium transition flex items-center justify-center gap-2 active:scale-95 ${
               showVoice
                 ? 'bg-indigo-500 text-white ring-2 ring-indigo-300'
@@ -383,16 +407,27 @@ export default function Calendar() {
             }`}
           >🎤 음성으로 추가</button>
           <button
-            onClick={() => { setFormInitial({}); setShowForm(s => !s); setShowVoice(false); setEditingEvent(null); }}
+            onClick={() => { setFormInitial({}); setShowForm(s => !s); setShowVoice(false); setShowAnniversary(false); setEditingEvent(null); }}
             className={`flex-1 shadow rounded-2xl py-3 text-sm font-medium transition flex items-center justify-center gap-2 active:scale-95 ${
               showForm && !editingEvent
                 ? 'bg-indigo-700 text-white ring-2 ring-indigo-300'
                 : 'bg-indigo-500 text-white hover:bg-indigo-600'
             }`}
           >✚ 직접 입력</button>
+          <button
+            onClick={() => { setShowAnniversary(s => !s); setShowForm(false); setShowVoice(false); setEditingEvent(null); }}
+            className={`shadow rounded-2xl py-3 px-4 text-sm font-medium transition flex items-center justify-center gap-1 active:scale-95 ${
+              showAnniversary
+                ? 'bg-purple-600 text-white ring-2 ring-purple-300'
+                : 'bg-white text-purple-600 hover:bg-purple-50'
+            }`}
+          >🎉 기념일</button>
         </div>
 
         {showVoice && <VoiceInput onParsed={handleVoiceParsed} />}
+        {showAnniversary && (
+          <AnniversaryPanel list={anniversaries} onChanged={refreshAnniversaries} />
+        )}
 
         {/* 달력 */}
         <div className="bg-white rounded-2xl shadow p-4">
@@ -404,6 +439,7 @@ export default function Calendar() {
           <div className="grid grid-cols-7 gap-y-1">
             {days.map(day => {
               const de = eventsOnDay(day);
+              const da = anniversariesOnDay(anniversaries, day);
               const isSelected = selectedDay && isSameDay(day, selectedDay);
               const isToday = isSameDay(day, new Date());
               const holiday = getHoliday(day);
@@ -427,6 +463,11 @@ export default function Calendar() {
                       {holiday.replace(' 연휴', '').replace('·', '/')}
                     </p>
                   )}
+                  {da.map(a => (
+                    <p key={a.id} className="text-[8px] text-purple-400 text-center leading-tight truncate px-0.5 mb-0.5">
+                      {a.emoji}{a.title}
+                    </p>
+                  ))}
                   <div className="space-y-0.5">
                     {de.slice(0, 2).map(e => (
                       <div key={e.id} className={`text-white text-[9px] rounded px-1 truncate ${MEMBER_COLORS[e.member] ?? 'bg-gray-400'}`}>

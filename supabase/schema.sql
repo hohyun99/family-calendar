@@ -31,3 +31,20 @@ CREATE POLICY "public_all" ON public.push_subscriptions
 
 -- Realtime 활성화
 ALTER PUBLICATION supabase_realtime ADD TABLE public.events;
+
+-- 기념일 테이블
+CREATE TABLE IF NOT EXISTS public.anniversaries (
+  id         UUID  PRIMARY KEY DEFAULT gen_random_uuid(),
+  title      TEXT  NOT NULL,
+  month      INT   NOT NULL CHECK (month BETWEEN 1 AND 12),
+  day        INT   NOT NULL CHECK (day BETWEEN 1 AND 31),
+  emoji      TEXT  NOT NULL DEFAULT '🎉',
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+ALTER TABLE public.anniversaries ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY "public_all" ON public.anniversaries
+  FOR ALL TO anon USING (true) WITH CHECK (true);
+
+ALTER PUBLICATION supabase_realtime ADD TABLE public.anniversaries;
