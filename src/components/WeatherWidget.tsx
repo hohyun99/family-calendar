@@ -54,6 +54,27 @@ function pm25Grade(v: number): Grade {
   return               { label: '매우나쁨', color: 'text-red-500',    bar: 'bg-red-400',    face: '🤢' };
 }
 
+function clothingAdvice(temp: number, minTemp: number): { icon: string; items: string[] } {
+  const t = Math.min(temp, minTemp);
+  if (t <= 4)  return { icon: '🧥', items: ['두꺼운 패딩', '목도리', '장갑', '귀마개'] };
+  if (t <= 8)  return { icon: '🧣', items: ['코트', '두꺼운 니트', '목도리'] };
+  if (t <= 11) return { icon: '🧶', items: ['자켓', '니트', '기모 바지'] };
+  if (t <= 16) return { icon: '👕', items: ['가디건', '얇은 니트', '청바지'] };
+  if (t <= 19) return { icon: '👔', items: ['얇은 긴팔', '가디건 (실내)'] };
+  if (t <= 22) return { icon: '👗', items: ['긴팔 셔츠', '면바지'] };
+  if (t <= 27) return { icon: '🩱', items: ['반팔', '얇은 소재'] };
+  return               { icon: '🌞', items: ['반팔·민소매', '통기성 좋은 옷'] };
+}
+
+function umbrellaAdvice(maxPrecipProb: number, codes: number[]): { need: boolean; icon: string; text: string } {
+  const hasSnow = codes.some(c => c >= 71 && c <= 77);
+  if (maxPrecipProb >= 60)
+    return { need: true,  icon: hasSnow ? '❄️' : '☂️', text: hasSnow ? '우산·방한 필수' : '우산 꼭 챙기세요' };
+  if (maxPrecipProb >= 30)
+    return { need: true,  icon: '🌂', text: '우산 챙기면 좋아요' };
+  return { need: false, icon: '✅', text: '우산 불필요' };
+}
+
 function PmBar({ label, value, max, grade }: { label: string; value: number; max: number; grade: Grade }) {
   const pct = Math.min(100, Math.round((value / max) * 100));
   return (
@@ -130,9 +151,15 @@ export default function WeatherWidget() {
   const nowIdx = slots.findIndex(s => s.hour === nowHour);
   const current = slots[nowIdx] ?? slots[0];
   const upcoming = slots.slice(nowIdx + 1, nowIdx + 7);
+  const remaining = slots.slice(nowIdx); // 지금부터 자정까지
 
   const p10 = pm10Grade(current.pm10);
   const p25 = pm25Grade(current.pm25);
+
+  const minTempToday = Math.min(...remaining.map(s => s.temp));
+  const maxPrecipToday = Math.max(...remaining.map(s => s.precipProb));
+  const clothing = clothingAdvice(current.temp, minTempToday);
+  const umbrella = umbrellaAdvice(maxPrecipToday, remaining.map(s => s.code));
 
   return (
     <div className="bg-white rounded-2xl shadow p-4 space-y-3">
@@ -146,6 +173,21 @@ export default function WeatherWidget() {
           </div>
         </div>
         <p className="text-xs text-gray-400 font-medium">수원 · 지금</p>
+      </div>
+
+      {/* 옷차림 + 우산 */}
+      <div className="flex gap-2">
+        <div className="flex-1 bg-sky-50 rounded-xl px-3 py-2">
+          <p className="text-[10px] text-sky-400 font-semibold mb-1">{clothing.icon} 오늘 옷차림</p>
+          <p className="text-xs text-sky-700">{clothing.items.join(' · ')}</p>
+        </div>
+        <div className={`flex-1 rounded-xl px-3 py-2 ${umbrella.need ? 'bg-indigo-50' : 'bg-gray-50'}`}>
+          <p className={`text-[10px] font-semibold mb-1 ${umbrella.need ? 'text-indigo-400' : 'text-gray-400'}`}>
+            {umbrella.icon} 우산
+          </p>
+          <p className={`text-xs ${umbrella.need ? 'text-indigo-700' : 'text-gray-500'}`}>{umbrella.text}</p>
+          <p className="text-[10px] text-gray-400 mt-0.5">최대 강수 {maxPrecipToday}%</p>
+        </div>
       </div>
 
       {/* 미세먼지 바 */}
