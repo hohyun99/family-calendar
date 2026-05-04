@@ -14,6 +14,12 @@ interface HourlySlot {
   pm25: number;
 }
 
+interface ClothingAdvice {
+  icon: string;
+  items: string[];
+  extra: string;
+}
+
 function weatherEmoji(code: number) {
   if (code === 0)  return '☀️';
   if (code <= 2)   return '🌤️';
@@ -54,29 +60,6 @@ function pm25Grade(v: number): Grade {
   return               { label: '매우나쁨', color: 'text-red-500',    bar: 'bg-red-400',    face: '🤢' };
 }
 
-function clothingAdvice(temp: number, minTemp: number): { icon: string; items: string[]; extra?: string } {
-  // 현재 기온 기준으로 지금 옷차림 추천
-  let icon: string;
-  let items: string[];
-  if (temp <= 4)       { icon = '🧥'; items = ['두꺼운 패딩', '목도리', '장갑']; }
-  else if (temp <= 8)  { icon = '🧣'; items = ['코트', '두꺼운 니트', '목도리']; }
-  else if (temp <= 11) { icon = '🧶'; items = ['자켓', '니트']; }
-  else if (temp <= 16) { icon = '🧥'; items = ['가디건', '얇은 니트']; }
-  else if (temp <= 19) { icon = '👔'; items = ['얇은 긴팔', '가디건']; }
-  else if (temp <= 23) { icon = '👗'; items = ['반팔', '얇은 긴팔']; }
-  else if (temp <= 27) { icon = '🩱'; items = ['반팔']; }
-  else                 { icon = '🌞'; items = ['반팔·민소매']; }
-
-  // 저녁에 크게 추워지면 추가 안내
-  let extra: string | undefined;
-  if (temp - minTemp >= 10)
-    extra = `저녁 ${minTemp}°C — 겉옷 챙기세요`;
-  else if (temp - minTemp >= 7 && minTemp <= 15)
-    extra = `저녁엔 얇은 겉옷 필요`;
-
-  return { icon, items, extra };
-}
-
 function umbrellaAdvice(maxPrecipProb: number, codes: number[]): { need: boolean; icon: string; text: string } {
   const hasSnow = codes.some(c => c >= 71 && c <= 77);
   if (maxPrecipProb >= 60)
@@ -106,6 +89,8 @@ export default function WeatherWidget() {
   const [slots, setSlots] = useState<HourlySlot[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);
+  const [clothing, setClothing] = useState<ClothingAdvice | null>(null);
+  const [clothingLoading, setClothingLoading] = useState(false);
 
   useEffect(() => {
     async function fetch_() {
@@ -133,6 +118,19 @@ export default function WeatherWidget() {
         }));
 
         setSlots(result);
+
+        // 옷차림 AI 추천 — 하루 전체 슬롯을 서버로 전송
+        setClothingLoading(true);
+        const aiSlots = result.map(({ hour, temp, code, precipProb }) => ({ hour, temp, code, precipProb }));
+        fetch('/api/clothing', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ slots: aiSlots }),
+        })
+          .then(r => r.json())
+          .then((data: ClothingAdvice) => setClothing(data))
+          .catch(() => {/* 실패 시 표시 없음 */})
+          .finally(() => setClothingLoading(false));
       } catch {
         setError(true);
       } finally {
@@ -162,14 +160,12 @@ export default function WeatherWidget() {
   const nowIdx = slots.findIndex(s => s.hour === nowHour);
   const current = slots[nowIdx] ?? slots[0];
   const upcoming = slots.slice(nowIdx + 1, nowIdx + 7);
-  const remaining = slots.slice(nowIdx); // 지금부터 자정까지
+  const remaining = slots.slice(nowIdx);
 
   const p10 = pm10Grade(current.pm10);
   const p25 = pm25Grade(current.pm25);
 
-  const minTempToday = Math.min(...remaining.map(s => s.temp));
   const maxPrecipToday = Math.max(...remaining.map(s => s.precipProb));
-  const clothing = clothingAdvice(current.temp, minTempToday);
   const umbrella = umbrellaAdvice(maxPrecipToday, remaining.map(s => s.code));
 
   return (
@@ -188,10 +184,18 @@ export default function WeatherWidget() {
 
       {/* 옷차림 + 우산 */}
       <div className="flex gap-2">
-        <div className="flex-1 bg-sky-50 rounded-xl px-3 py-2">
-          <p className="text-[10px] text-sky-400 font-semibold mb-1">{clothing.icon} 오늘 옷차림</p>
-          <p className="text-xs text-sky-700">{clothing.items.join(' · ')}</p>
-          {clothing.extra && <p className="text-[10px] text-orange-400 mt-0.5">{clothing.extra}</p>}
+        <div className="flex-1 bg-sky-50 rounded-xl px-3 py-2 min-h-[56px]">
+          <p className="text-[10px] text-sky-400 font-semibold mb-1">
+            {clothingLoading ? '👕' : (clothing?.icon ?? '👕')} 오늘 옷차림
+          </p>
+          {clothingLoading ? (
+            <p className="text-[10px] text-sky-300 animate-pulse">AI 추천 중...</p>
+          ) : clothing ? (
+            <>
+              <p className="text-xs text-sky-700">{clothing.items.join(' · ')}</p>
+              {clothing.extra && <p className="text-[10px] text-orange-400 mt-0.5">{clothing.extra}</p>}
+            </>
+          ) : null}
         </div>
         <div className={`flex-1 rounded-xl px-3 py-2 ${umbrella.need ? 'bg-indigo-50' : 'bg-gray-50'}`}>
           <p className={`text-[10px] font-semibold mb-1 ${umbrella.need ? 'text-indigo-400' : 'text-gray-400'}`}>
