@@ -8,7 +8,6 @@ import {
 import { ko } from 'date-fns/locale';
 import EventForm from './EventForm';
 import VoiceInput from './VoiceInput';
-import WeeklyView from './WeeklyView';
 import WeatherWidget from './WeatherWidget';
 import { CalendarEvent, EventPayload } from '@/types/event';
 import { listEvents, addEvent, updateEvent, deleteEvent, markNotified } from '@/lib/db';
@@ -273,6 +272,13 @@ export default function Calendar() {
   };
 
   const todayEvents = selectedDay ? eventsOnDay(selectedDay) : [];
+  const today = new Date();
+  const yuchanToday = events
+    .filter(e => e.member === '유찬' && isSameDay(parseISO(e.start_at), today))
+    .sort((a, b) => a.start_at.localeCompare(b.start_at));
+  const yujuToday = events
+    .filter(e => e.member === '유주' && isSameDay(parseISO(e.start_at), today))
+    .sort((a, b) => a.start_at.localeCompare(b.start_at));
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-indigo-50 to-pink-50 p-4">
@@ -288,6 +294,41 @@ export default function Calendar() {
       <div className="max-w-lg mx-auto space-y-4">
         {/* 날씨 */}
         <WeatherWidget />
+
+        {/* 오늘의 주요 일정 */}
+        <div className="bg-white rounded-2xl shadow p-4">
+          <h2 className="text-sm font-bold text-gray-700 mb-3">
+            오늘 {format(today, 'M월 d일 (E)', { locale: ko })} 주요 일정
+          </h2>
+          <div className="grid grid-cols-2 gap-3">
+            {(['유찬', '유주'] as const).map(name => {
+              const list = name === '유찬' ? yuchanToday : yujuToday;
+              const color = name === '유찬' ? 'text-blue-600 bg-blue-50 border-blue-100' : 'text-pink-600 bg-pink-50 border-pink-100';
+              const dot   = name === '유찬' ? 'bg-blue-400' : 'bg-pink-400';
+              return (
+                <div key={name} className={`rounded-xl border p-3 ${color}`}>
+                  <div className="flex items-center gap-1.5 mb-2">
+                    <span className={`w-2 h-2 rounded-full ${dot}`} />
+                    <span className="text-xs font-bold">{name}</span>
+                  </div>
+                  {list.length === 0
+                    ? <p className="text-xs opacity-50">일정 없음</p>
+                    : list.map(e => (
+                      <div key={e.id} className="mb-1.5 last:mb-0">
+                        <p className="text-xs font-medium text-gray-800 leading-tight">{e.title}</p>
+                        {!e.all_day && (
+                          <p className="text-[11px] opacity-60">
+                            {format(parseISO(e.start_at), 'a h:mm', { locale: ko })}
+                          </p>
+                        )}
+                      </div>
+                    ))
+                  }
+                </div>
+              );
+            })}
+          </div>
+        </div>
 
         {/* 헤더 */}
         <div className="bg-white rounded-2xl shadow p-4 flex items-center justify-between">
@@ -413,9 +454,6 @@ export default function Calendar() {
             />
           </div>
         )}
-
-        {/* 주간 일정 */}
-        <WeeklyView events={events} />
 
         {/* 범례 */}
         <div className="bg-white rounded-2xl shadow p-3 flex justify-around">
