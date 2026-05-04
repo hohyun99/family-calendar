@@ -12,6 +12,7 @@ import WeatherWidget from './WeatherWidget';
 import { CalendarEvent, EventPayload } from '@/types/event';
 import { listEvents, addEvent, updateEvent, deleteEvent, markNotified } from '@/lib/db';
 import { supabase } from '@/lib/supabase';
+import { getHoliday } from '@/lib/holidays';
 
 const MEMBER_COLORS: Record<string, string> = {
   유찬: 'bg-blue-400', 유주: 'bg-pink-400', 엄마: 'bg-green-400', 아빠: 'bg-orange-400',
@@ -273,6 +274,7 @@ export default function Calendar() {
 
   const todayEvents = selectedDay ? eventsOnDay(selectedDay) : [];
   const focusDay = selectedDay ?? new Date();
+  const focusHoliday = getHoliday(focusDay);
   const MEMBERS_CONFIG = [
     { name: '유찬', card: 'bg-blue-50 border-blue-100',   dot: 'bg-blue-400',   label: 'text-blue-700' },
     { name: '유주', card: 'bg-pink-50 border-pink-100',   dot: 'bg-pink-400',   label: 'text-pink-700' },
@@ -298,6 +300,17 @@ export default function Calendar() {
       <div className="max-w-lg mx-auto space-y-4">
         {/* 날씨 */}
         <WeatherWidget />
+
+        {/* 공휴일 배너 */}
+        {focusHoliday && (
+          <div className="bg-red-50 border border-red-100 rounded-2xl px-4 py-3 flex items-center gap-2">
+            <span className="text-lg">🎌</span>
+            <div>
+              <p className="text-sm font-bold text-red-600">{focusHoliday}</p>
+              <p className="text-xs text-red-400">{format(focusDay, 'M월 d일 (E)', { locale: ko })} 공휴일</p>
+            </div>
+          </div>
+        )}
 
         {/* 주요 일정 (선택 날짜, 기본=오늘) */}
         <div className="bg-white rounded-2xl shadow p-4">
@@ -393,15 +406,27 @@ export default function Calendar() {
               const de = eventsOnDay(day);
               const isSelected = selectedDay && isSameDay(day, selectedDay);
               const isToday = isSameDay(day, new Date());
+              const holiday = getHoliday(day);
+              const isSun = day.getDay() === 0;
+              const isSat = day.getDay() === 6;
               return (
                 <div
                   key={day.toISOString()}
                   onClick={() => { setSelectedDay(day); setShowForm(false); setEditingEvent(null); setSelectedEvent(null); }}
                   className={`rounded-xl p-1 cursor-pointer transition min-h-[52px] ${!isSameMonth(day, currentMonth) ? 'opacity-30' : ''} ${isSelected ? 'bg-indigo-100 ring-2 ring-indigo-400' : 'hover:bg-gray-50'}`}
                 >
-                  <div className={`text-xs text-center font-semibold mb-1 w-6 h-6 flex items-center justify-center mx-auto rounded-full ${isToday ? 'bg-indigo-500 text-white' : 'text-gray-700'}`}>
+                  <div className={`text-xs text-center font-semibold mb-0.5 w-6 h-6 flex items-center justify-center mx-auto rounded-full ${
+                    isToday ? 'bg-indigo-500 text-white' :
+                    holiday || isSun ? 'text-red-500' :
+                    isSat ? 'text-blue-500' : 'text-gray-700'
+                  }`}>
                     {format(day, 'd')}
                   </div>
+                  {holiday && (
+                    <p className="text-[8px] text-red-400 text-center leading-tight truncate px-0.5 mb-0.5">
+                      {holiday.replace(' 연휴', '').replace('·', '/')}
+                    </p>
+                  )}
                   <div className="space-y-0.5">
                     {de.slice(0, 2).map(e => (
                       <div key={e.id} className={`text-white text-[9px] rounded px-1 truncate ${MEMBER_COLORS[e.member] ?? 'bg-gray-400'}`}>
