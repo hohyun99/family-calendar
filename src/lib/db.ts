@@ -16,7 +16,7 @@ export interface CalendarEvent {
   created_at: string;
 }
 
-export type EventPayload = Omit<CalendarEvent, 'id' | 'notified' | 'created_at'>;
+export type EventPayload = Omit<CalendarEvent, 'id' | 'notified' | 'last_notified_date' | 'created_at'>;
 
 export async function listEvents(from?: string, to?: string): Promise<CalendarEvent[]> {
   let q = supabase.from('events').select('*').order('start_at');
