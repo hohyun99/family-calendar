@@ -308,10 +308,19 @@ export default function Calendar() {
     setSelectedEvent(null);
   };
 
-  const handleVoiceParsed = (parsed: { title: string; member: string; start_at: string; end_at?: string }) => {
-    setFormInitial({ title: parsed.title, member: parsed.member, start_at: parsed.start_at, end_at: parsed.end_at });
-    setEditingEvent(null); setShowVoice(false); setShowForm(true);
+  const handleVoiceParsed = async (parsed: { title: string; member: string; start_at: string; end_at?: string }) => {
+    setShowVoice(false);
+    await addEvent({
+      title: parsed.title,
+      member: parsed.member,
+      start_at: parsed.start_at,
+      end_at: parsed.end_at ?? null,
+      all_day: false,
+      notify: false,
+      recurrence: 'none',
+    });
     setSelectedDay(new Date(parsed.start_at));
+    addToast(`${parsed.member} · ${parsed.title} 추가됐어요!`);
   };
 
   const todayEvents = selectedDay ? eventsOnDay(selectedDay) : [];
@@ -476,7 +485,12 @@ export default function Calendar() {
           ><Gift size={15} /> 기념일</button>
         </div>
 
-        {showVoice && <VoiceInput onParsed={handleVoiceParsed} />}
+        {showVoice && (
+          <VoiceInput
+            onParsed={handleVoiceParsed}
+            onError={msg => { addToast(msg); setShowVoice(false); }}
+          />
+        )}
         {showAnniversary && (
           <AnniversaryPanel list={anniversaries} onChanged={refreshAnniversaries} />
         )}
