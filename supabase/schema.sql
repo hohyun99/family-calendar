@@ -9,7 +9,8 @@ CREATE TABLE IF NOT EXISTS public.events (
   all_day     BOOLEAN     NOT NULL DEFAULT FALSE,
   notify      BOOLEAN     NOT NULL DEFAULT TRUE,
   notified    BOOLEAN     NOT NULL DEFAULT FALSE,
-  recurrence  TEXT        NOT NULL DEFAULT 'none', -- none | daily | weekly | monthly
+  recurrence          TEXT NOT NULL DEFAULT 'none', -- none | daily | weekly | monthly
+  last_notified_date  TEXT DEFAULT NULL,           -- 반복 알림용 마지막 발화 날짜 (YYYY-MM-DD)
   created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 

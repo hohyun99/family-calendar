@@ -175,30 +175,70 @@ export default function Calendar() {
     return () => { released = true; };
   }, []);
 
+  // ── 알림 헬퍼 ─────────────────────────────────────────────────────────
+  const todayStr = () => format(new Date(), 'yyyy-MM-dd');
+
+  // 반복 이벤트의 오늘 발화 예정 시각 (ms)
+  const recurringFireAt = (ev: CalendarEvent) => {
+    const start = parseISO(ev.start_at);
+    const t = new Date();
+    t.setHours(start.getHours(), start.getMinutes(), 0, 0);
+    return t.getTime() - 10 * 60 * 1000;
+  };
+
+  // 오늘 이 반복 이벤트가 표시되는지 (알림 대상인지)
+  const appliesToday = (ev: CalendarEvent) => {
+    const today = new Date();
+    const start = parseISO(ev.start_at);
+    const startDay = new Date(start.getFullYear(), start.getMonth(), start.getDate());
+    const todayDay = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+    if (todayDay < startDay) return false;
+    switch (ev.recurrence) {
+      case 'daily':   return today.getDay() !== 0 && today.getDay() !== 6 && !getHoliday(today);
+      case 'weekly':  return today.getDay() === start.getDay();
+      case 'monthly': return today.getDate() === start.getDate();
+      default:        return false;
+    }
+  };
+
   // ── 알림 발화 (중복 방지용 Set) ────────────────────────────────────────
   const firedRef = useRef<Set<string>>(new Set());
 
   const maybeFire = useCallback(async (ev: CalendarEvent) => {
-    if (firedRef.current.has(ev.id)) return;
-    firedRef.current.add(ev.id);
+    const key = ev.recurrence !== 'none' ? `${ev.id}-${todayStr()}` : ev.id;
+    if (firedRef.current.has(key)) return;
+    firedRef.current.add(key);
     fireVoice(ev);
-    await markNotified(ev.id);
+    if (ev.recurrence !== 'none') {
+      await markNotified(ev.id, todayStr());
+    } else {
+      await markNotified(ev.id);
+    }
     refresh();
-  }, [fireVoice, refresh]);
+  }, [fireVoice, refresh]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── 정확한 setTimeout 예약 ─────────────────────────────────────────────
   useEffect(() => {
     const timers: ReturnType<typeof setTimeout>[] = [];
     const now = Date.now();
     for (const ev of events) {
-      if (!ev.notify || ev.notified || ev.all_day || ev.recurrence !== 'none') continue;
-      const delay = new Date(ev.start_at).getTime() - 10 * 60 * 1000 - now;
+      if (!ev.notify || ev.all_day) continue;
+      let fireAt: number;
+      if (ev.recurrence === 'none') {
+        if (ev.notified) continue;
+        fireAt = new Date(ev.start_at).getTime() - 10 * 60 * 1000;
+      } else {
+        if (ev.last_notified_date === todayStr()) continue;
+        if (!appliesToday(ev)) continue;
+        fireAt = recurringFireAt(ev);
+      }
+      const delay = fireAt - now;
       if (delay >= 0 && delay < 24 * 60 * 60 * 1000) {
         timers.push(setTimeout(() => maybeFire(ev), delay));
       }
     }
     return () => timers.forEach(clearTimeout);
-  }, [events, maybeFire]);
+  }, [events, maybeFire]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── 탭 복귀 시 놓친 알림 체크 ─────────────────────────────────────────
   useEffect(() => {
@@ -207,32 +247,43 @@ export default function Calendar() {
       await refresh();
       const now = Date.now();
       for (const ev of events) {
-        if (!ev.notify || ev.notified || ev.all_day || ev.recurrence !== 'none') continue;
-        const fireAt = new Date(ev.start_at).getTime() - 10 * 60 * 1000;
-        // 놓친 알림: 지금보다 최대 5분 전까지
-        if (fireAt <= now && fireAt >= now - 5 * 60 * 1000) {
-          maybeFire(ev);
+        if (!ev.notify || ev.all_day) continue;
+        let fireAt: number;
+        if (ev.recurrence === 'none') {
+          if (ev.notified) continue;
+          fireAt = new Date(ev.start_at).getTime() - 10 * 60 * 1000;
+        } else {
+          if (ev.last_notified_date === todayStr()) continue;
+          if (!appliesToday(ev)) continue;
+          fireAt = recurringFireAt(ev);
         }
+        if (fireAt <= now && fireAt >= now - 5 * 60 * 1000) maybeFire(ev);
       }
     };
     document.addEventListener('visibilitychange', check);
     return () => document.removeEventListener('visibilitychange', check);
-  }, [events, maybeFire, refresh]);
+  }, [events, maybeFire, refresh]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // ── 60초 폴링 (setTimeout 보조) ────────────────────────────────────────
+  // ── 30초 폴링 (setTimeout 보조) ───────────────────────────────────────
   useEffect(() => {
     const id = setInterval(async () => {
       const now = Date.now();
       for (const ev of events) {
-        if (!ev.notify || ev.notified || ev.all_day || ev.recurrence !== 'none') continue;
-        const fireAt = new Date(ev.start_at).getTime() - 10 * 60 * 1000;
-        if (fireAt <= now && fireAt >= now - 60 * 1000) {
-          maybeFire(ev);
+        if (!ev.notify || ev.all_day) continue;
+        let fireAt: number;
+        if (ev.recurrence === 'none') {
+          if (ev.notified) continue;
+          fireAt = new Date(ev.start_at).getTime() - 10 * 60 * 1000;
+        } else {
+          if (ev.last_notified_date === todayStr()) continue;
+          if (!appliesToday(ev)) continue;
+          fireAt = recurringFireAt(ev);
         }
+        if (fireAt <= now && fireAt >= now - 30 * 1000) maybeFire(ev);
       }
     }, 30_000);
     return () => clearInterval(id);
-  }, [events, maybeFire]);
+  }, [events, maybeFire]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── 알림 권한 + Service Worker 초기화 ─────────────────────────────────
   const setupNotifications = async () => {
@@ -317,7 +368,7 @@ export default function Calendar() {
       start_at: parsed.start_at,
       end_at: parsed.end_at ?? null,
       all_day: false,
-      notify: recurrence === 'none',
+      notify: true,
       recurrence,
     });
     setSelectedDay(new Date(parsed.start_at));

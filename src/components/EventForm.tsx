@@ -56,7 +56,7 @@ export default function EventForm({ initial, submitLabel = '저장', onSubmit, o
         start_at: localToIso(startAt),
         end_at: endAt ? localToIso(endAt) : null,
         all_day: allDay,
-        notify: isRecurring ? false : notify,
+        notify,
         recurrence,
       });
     } finally {
@@ -164,12 +164,12 @@ export default function EventForm({ initial, submitLabel = '저장', onSubmit, o
         </div>
       )}
 
-      {!isRecurring && (
-        <div className="flex items-center gap-2">
-          <input type="checkbox" id="notify" checked={notify} onChange={e => setNotify(e.target.checked)} />
-          <label htmlFor="notify" className="text-sm text-gray-700">10분 전 알림</label>
-        </div>
-      )}
+      <div className="flex items-center gap-2">
+        <input type="checkbox" id="notify" checked={notify} onChange={e => setNotify(e.target.checked)} />
+        <label htmlFor="notify" className="text-sm text-gray-700">
+          10분 전 알림{isRecurring ? ' (매 반복마다)' : ''}
+        </label>
+      </div>
 
       <div className="flex gap-2 pt-2">
         <button

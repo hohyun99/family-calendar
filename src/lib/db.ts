@@ -12,6 +12,7 @@ export interface CalendarEvent {
   notify: boolean;
   notified: boolean;
   recurrence: Recurrence;
+  last_notified_date: string | null;
   created_at: string;
 }
 
@@ -60,8 +61,12 @@ export async function deleteEvent(id: string): Promise<void> {
   if (error) throw error;
 }
 
-export async function markNotified(id: string): Promise<void> {
-  await supabase.from('events').update({ notified: true }).eq('id', id);
+export async function markNotified(id: string, recurringDate?: string): Promise<void> {
+  if (recurringDate) {
+    await supabase.from('events').update({ last_notified_date: recurringDate }).eq('id', id);
+  } else {
+    await supabase.from('events').update({ notified: true }).eq('id', id);
+  }
 }
 
 // 8~12분 후 이벤트 (서버사이드 알림 API에서도 사용)
