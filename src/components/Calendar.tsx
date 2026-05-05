@@ -244,6 +244,20 @@ export default function Calendar() {
     }
   };
 
+  const disableNotifications = async () => {
+    try {
+      if ('serviceWorker' in navigator) {
+        const reg = await navigator.serviceWorker.ready;
+        const sub = await reg.pushManager.getSubscription();
+        if (sub) {
+          await supabase.from('push_subscriptions').delete().eq('endpoint', sub.endpoint);
+          await sub.unsubscribe();
+        }
+      }
+    } catch { /* 무시 */ }
+    setPushGranted(false);
+  };
+
   useEffect(() => {
     if (Notification.permission === 'granted') {
       setPushGranted(true);
@@ -400,25 +414,39 @@ export default function Calendar() {
           </button>
         </div>
 
-        {/* 알림 배너 */}
-        {!pushGranted ? (
-          <button
-            onClick={setupNotifications}
-            className="bg-amber-50 border border-amber-200 rounded-2xl px-4 py-3 flex items-center gap-3 text-sm text-amber-700 w-full hover:bg-amber-100 transition"
-          >
-            <BellOff size={16} className="shrink-0" />
-            <span>여기를 눌러 알림을 허용해 주세요 — 탭이 닫혀도 알려드려요</span>
-          </button>
-        ) : (
-          <div className="bg-green-50 border border-green-200 rounded-2xl px-4 py-3 flex items-center gap-3 text-sm text-green-700">
-            <Bell size={16} className="shrink-0" />
-            <span className="flex-1">알림 켜짐 — 탭이 닫혀도 10분 전에 알려드려요</span>
+        {/* 알림 설정 */}
+        <div className={`rounded-2xl border px-4 py-3 flex items-center gap-3 text-sm transition ${
+          pushGranted
+            ? 'bg-green-50 border-green-200 text-green-700'
+            : 'bg-gray-50 border-gray-200 text-gray-500'
+        }`}>
+          {pushGranted
+            ? <Bell size={16} className="shrink-0 text-green-500" />
+            : <BellOff size={16} className="shrink-0 text-gray-400" />
+          }
+          <span className="flex-1">
+            알림 <span className={`font-semibold ${pushGranted ? 'text-green-600' : 'text-gray-400'}`}>
+              {pushGranted ? '켜짐' : '꺼짐'}
+            </span>
+            {pushGranted && <span className="text-xs text-green-500 ml-1">— 10분 전 알림</span>}
+          </span>
+          {pushGranted && (
             <button
               onClick={() => { initAudio(); playBeep(); speakText('유찬아, 알림 테스트예요!'); }}
-              className="flex items-center gap-1 text-xs bg-green-100 hover:bg-green-200 px-2 py-1 rounded-lg transition whitespace-nowrap"
-            ><Volume2 size={12} /> 소리 테스트</button>
-          </div>
-        )}
+              className="flex items-center gap-1 text-xs bg-green-100 hover:bg-green-200 text-green-700 px-2 py-1 rounded-lg transition"
+            ><Volume2 size={12} /> 테스트</button>
+          )}
+          <button
+            onClick={pushGranted ? disableNotifications : setupNotifications}
+            className={`flex items-center gap-1 text-xs px-3 py-1.5 rounded-lg font-medium transition ${
+              pushGranted
+                ? 'bg-red-100 hover:bg-red-200 text-red-600'
+                : 'bg-indigo-100 hover:bg-indigo-200 text-indigo-600'
+            }`}
+          >
+            {pushGranted ? <><BellOff size={12} /> 끄기</> : <><Bell size={12} /> 켜기</>}
+          </button>
+        </div>
 
         {/* 버튼 */}
         <div className="flex gap-2">
