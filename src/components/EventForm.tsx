@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { EventPayload, Recurrence } from '@/lib/db';
 
 const MEMBERS = ['유찬', '유주', '엄마', '아빠'];
@@ -45,6 +45,11 @@ export default function EventForm({ initial, submitLabel = '저장', onSubmit, o
   const [loading, setLoading] = useState(false);
 
   const isRecurring = recurrence !== 'none';
+
+  // 반복 유형 선택 시 알림 자동 켜기
+  useEffect(() => {
+    if (isRecurring) setNotify(true);
+  }, [isRecurring]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
