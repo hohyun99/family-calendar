@@ -8,6 +8,7 @@ interface ParsedEvent {
   member: string;
   start_at: string;
   end_at?: string;
+  recurrence?: string;
 }
 
 interface Props {

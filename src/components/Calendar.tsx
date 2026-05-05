@@ -308,19 +308,21 @@ export default function Calendar() {
     setSelectedEvent(null);
   };
 
-  const handleVoiceParsed = async (parsed: { title: string; member: string; start_at: string; end_at?: string }) => {
+  const handleVoiceParsed = async (parsed: { title: string; member: string; start_at: string; end_at?: string; recurrence?: string }) => {
     setShowVoice(false);
+    const recurrence = (['daily','weekly','monthly'].includes(parsed.recurrence ?? '') ? parsed.recurrence : 'none') as Recurrence;
     await addEvent({
       title: parsed.title,
       member: parsed.member,
       start_at: parsed.start_at,
       end_at: parsed.end_at ?? null,
       all_day: false,
-      notify: false,
-      recurrence: 'none',
+      notify: recurrence === 'none',
+      recurrence,
     });
     setSelectedDay(new Date(parsed.start_at));
-    addToast(`${parsed.member} · ${parsed.title} 추가됐어요!`);
+    const recLabel: Record<string, string> = { daily: ' (매일)', weekly: ' (매주)', monthly: ' (매월)' };
+    addToast(`${parsed.member} · ${parsed.title}${recLabel[recurrence] ?? ''} 추가됐어요!`);
   };
 
   const todayEvents = selectedDay ? eventsOnDay(selectedDay) : [];

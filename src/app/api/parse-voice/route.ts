@@ -17,9 +17,10 @@ export async function POST(req: NextRequest) {
 
 {
   "member": "유찬|유주|엄마|아빠 중 하나 (언급 없으면 유찬)",
-  "title": "일정 제목 (깔끔하게 정리)",
+  "title": "일정 제목 (깔끔하게 정리, 반복 관련 단어 제외)",
   "start_at": "ISO 8601 형식 (예: 2026-05-06T15:00:00+09:00)",
-  "end_at": "종료 시각 ISO 8601 또는 null"
+  "end_at": "종료 시각 ISO 8601 또는 null",
+  "recurrence": "none|daily|weekly|monthly"
 }
 
 규칙:
@@ -29,7 +30,11 @@ export async function POST(req: NextRequest) {
 - "n시 반" → n시 30분
 - "내일" "모레" "다음주 화요일" 등 자연어 날짜 해석
 - "n시간 동안" → end_at 계산
-- timezone은 항상 +09:00`,
+- timezone은 항상 +09:00
+- "매일" → recurrence: daily
+- "매주" 또는 "주마다" 또는 특정 요일 반복 → recurrence: weekly, start_at은 다음 해당 요일
+- "매월" 또는 "달마다" → recurrence: monthly
+- 반복 언급 없으면 → recurrence: none`,
   });
 
   const raw = (response.text ?? '').trim().replace(/^```json\n?/, '').replace(/\n?```$/, '');
